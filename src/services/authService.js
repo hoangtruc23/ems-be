@@ -1,0 +1,74 @@
+const jwt = require('jsonwebtoken')
+const bcrypt = require('bcryptjs')
+const UserModel = require('../models/user')
+const { envConfig } = require('../config/envConfg')
+const { clientRedis } = require('../config/redisConfig')
+const BadReq = require('../utils/response/requestError')
+const constant = require('../utils/constant/constant')
+const errorCode = require('../utils/response/errorCode')
+
+const authService = {
+    login: async (username, password) => {
+        try {
+            const user = await UserModel.findOne({ username }).lean()
+            if (!user) {
+                throw new BadReq(errorCode.INCORRECT_USERNAME)
+            }
+            const comparePassword = await bcrypt.compare(
+                password,
+                user.password,
+            )
+
+            if (!comparePassword) {
+                throw new BadReq(errorCode.INCORRECT_PASSWORD)
+            }
+            delete user.password
+            const ts = Date.now()
+            const accessToken = jwt.sign(
+                { user: user, ts },
+                envConfig.JWT_ACCESS_TOKEN_PRIVATE_KEY,
+                { expiresIn: Number(envConfig.JWT_ACCESS_TOKEN_EXPIRES) },
+            )
+
+            // set redis
+            await clientRedis.set(
+                `${constant.REDIS_PREFIX_ACCESS_TOKEN}_${user._id}_${ts}`,
+                accessToken,
+                {
+                    EX: envConfig.JWT_ACCESS_TOKEN_EXPIRES,
+                },
+            )
+
+            return accessToken
+        } catch (error) {
+            throw error
+        }
+    },
+    logout: async (payloadToken) => {
+        try {
+            await clientRedis.del(
+                `${constant.REDIS_PREFIX_ACCESS_TOKEN}_${payloadToken.user}_${payloadToken.ts}`,
+            )
+            return null
+        } catch (error) {
+            throw error
+        }
+    },
+    getUserLoginDetail: async (currentUser) => {
+        try {
+            const user = await UserModel.findById(currentUser._id, {
+                password: 0,
+                __v: 0,
+            }).lean()
+
+            if (!user) {
+                throw new BadReq(errorCode.USER_NOT_FOUND)
+            }
+            return user
+        } catch (error) {
+            throw error
+        }
+    },
+}
+
+module.exports = authService

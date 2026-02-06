@@ -1,0 +1,50 @@
+{
+  "name": "bess-greenyellow-be",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "seed": "node src/seeders/index.js",
+    "format": "prettier --write \"{src,test}/**/*.{js,ts}\"",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "npm run format"
+    ]
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.4",
+    "nodemon": "^3.1.10",
+    "prettier": "^3.6.2"
+  },
+  "dependencies": {
+    "basic-ftp": "^5.0.5",
+    "bcryptjs": "^3.0.2",
+    "compression": "^1.8.1",
+    "cron": "^4.3.3",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.0.1",
+    "helmet": "^8.1.0",
+    "joi": "^18.0.2",
+    "jsonwebtoken": "^9.0.2",
+    "modbus-serial": "^8.0.21-no-serial-port",
+    "moment-timezone": "^0.6.0",
+    "mongoose": "^8.17.0",
+    "redis": "^5.7.0",
+    "socket.io": "^4.8.1",
+    "ssh2-sftp-client": "^7.0.4",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "systeminformation": "^5.27.14",
+    "winston": "^3.17.0",
+    "winston-daily-rotate-file": "^5.0.0"
+  }
+}
