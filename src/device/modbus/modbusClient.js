@@ -56,11 +56,11 @@ function ModbusHandler(device) {
 
     this.connectTCP = async () => {
         try {
-            const { host, port, slaveId } = this.device
+            const { config } = this.device
             const client = new ModbusSerial()
             await client.setTimeout(3000)
-            await client.connectTCP(host, { port: Number(port) })
-            client.setID(slaveId)
+            await client.connectTCP(config.host, { port: Number(config.port) })
+            client.setID(config.slaveId)
             this.client = client
             return client
         } catch (error) {

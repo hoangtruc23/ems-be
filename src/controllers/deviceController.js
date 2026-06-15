@@ -10,6 +10,22 @@ const deviceController = {
             next(error)
         }
     },
+    getAllLocation: async (req, res, next) => {
+        try {
+            const result = await deviceService.getAllLocation()
+            return res.status(200).json(response.success(result))
+        } catch (error) {
+            next(error)
+        }
+    },
+    create: async (req, res, next) => {
+        try {
+            const result = await deviceService.create(req.body)
+            return res.status(200).json(response.success(result))
+        } catch (error) {
+            next(error)
+        }
+    },
     update: async (req, res, next) => {
         try {
             const result = await deviceService.update(req.params, req.body)

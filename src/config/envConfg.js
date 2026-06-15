@@ -2,7 +2,7 @@ require('dotenv').config()
 
 const envConfig = {
     BASE_URL: process.env.BASE_URL || '/ems/api',
-    PORT: process.env.PORT || 3001,
+    PORT: process.env.PORT || 3000,
     SWAGGER_URL: process.env.SWAGGER_URL || '/ems/swagger',
     DB_HOST: process.env.DB_HOST || 'localhost',
     DB_PORT: process.env.DB_PORT || 27017,

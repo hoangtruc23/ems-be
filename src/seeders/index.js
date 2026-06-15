@@ -7,6 +7,7 @@ const userSeeder = require('./user')
 const configFtpSeeder = require('./configFtp')
 const controlConfigSeeder = require('./controlConfig')
 const configControlSeeder = require('./configControl')
+const settingSeeder = require('./setting')
 
 const args = process.argv.slice(2)
 
@@ -21,29 +22,22 @@ async function run() {
             //     await roleSeeder()
             //     break
             // }
-            // case 'device': {
-            //     await deviceSeeder()
-            //     break
-            // }
-            // case 'tagname': {
-            //     await tagnameSeeder()
-            //     break
-            // }
-            // case 'configFtp': {
-            //     await configFtpSeeder()
-            //     break
-            // }
-            // case 'controlConfig': {
-            //     await controlConfigSeeder()
-            //     break
-            // }
-            // case 'configControl': {
-            //     await configControlSeeder()
-            //     break
-            // }
+            case 'device': {
+                await deviceSeeder()
+                break
+            }
+            case 'tagname': {
+                await tagnameSeeder()
+                break
+            }
+            case 'setting': {
+                await settingSeeder()
+                break
+            }
 
             case 'all': {
                 await userSeeder()
+                await settingSeeder()
                 // await roleSeeder()
                 // await deviceSeeder()
                 // await tagnameSeeder()

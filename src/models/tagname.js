@@ -52,6 +52,7 @@ const tagnameSchema = new Schema({
     },
 })
 
+tagnameSchema.index({ deviceId: 1, name: 1 });
 const TagnameModel = model('tagnames', tagnameSchema, 'tagnames')
 
 module.exports = TagnameModel

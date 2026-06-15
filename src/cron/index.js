@@ -1,8 +1,7 @@
 require('./saveDb')
+// require('./alarms')
+// require('./control')
 // require('./writeFtpCron')
-require('./control')
-require('./alarms')
-// require('./systemInfo')
 
 // const sendFtp = require('./sendFtp')
 // sendFtp()

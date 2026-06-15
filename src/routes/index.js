@@ -13,6 +13,7 @@ const tagNameRoute = require('./tagNameRoute')
 const configFtpRoute = require('./configFtpRoute')
 const alarmRoute = require('./alarmRoute')
 const configControlRoute = require('./configControlRoute')
+const settingRoute = require('./settingRoute')
 
 router.use('/user', userRoute)
 router.use('/auth', authRoute)
@@ -26,5 +27,6 @@ router.use('/tagname', tagNameRoute)
 router.use('/configFtp', configFtpRoute)
 router.use('/alarm', alarmRoute)
 router.use('/configControl', configControlRoute)
+router.use('/setting', settingRoute)
 
 module.exports = router

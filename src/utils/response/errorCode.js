@@ -31,6 +31,10 @@ const errorCode = {
         code: 9,
         message: 'Hãy nhập StartTime và EndTime!',
     },
+    NO_DEVICE_FOUND: {
+        code: 10,
+        message: 'Không tìm thấy thiết bị!',
+    },
 }
 
 module.exports = errorCode

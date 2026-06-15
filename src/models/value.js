@@ -1,17 +1,34 @@
 const { Schema, model } = require('mongoose')
 
-const valueSchema = new Schema(
-    {
-        values: {
-            type: Schema.Types.Mixed,
-            required: true,
+const valueSchema = new Schema({
+    deviceId: {
+        type: Schema.Types.ObjectId,
+        ref: 'devices',
+        required: true,
+    },
+    values: [
+        {
+            value: [
+                {
+                    tagId: {
+                        type: Schema.Types.ObjectId,
+                        ref: 'tagnames'
+                    },
+                    value: { type: Schema.Types.Mixed },
+                    _id: false,
+                }
+            ],
+            ts: Number,
+            _id: false,
         },
+    ],
+    date: {
+        type: Date,
+        default: Date.now,
     },
-    {
-        timestamps: true,
-    },
-)
+})
 
-const ValueModel = model('values', valueSchema, 'values')
+valueSchema.index({ deviceId: 1, date: 1 });
+const ValuesModel = model('values', valueSchema)
 
-module.exports = ValueModel
+module.exports = ValuesModel

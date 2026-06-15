@@ -15,17 +15,17 @@ const {
 const ControlHelper = require('../utils/control/controlHelper')
 
 const deviceHandler = new DeviceHandler()
-;(async () => {
-    try {
-        await deviceHandler.connectAll()
-    } catch (error) {
-        logger.error(error)
-    }
-})()
+    ; (async () => {
+        try {
+            await deviceHandler.connectAll()
+        } catch (error) {
+            logger.error(error)
+        }
+    })()
 
 const connectSocket = (socket) => {
     logger.info('[Socket] Client đã kết nối: ' + socket.id)
-    const TIME = 1000
+    const TIME = 3000 //3s
     const CAPACITY = 1.15
     let devicesInterval = {}
     let mornitoringInterval = {}
@@ -153,89 +153,6 @@ const connectSocket = (socket) => {
         }
     })
 
-    socket.on('CLIENT GET OVERVIEW INFO', async () => {
-        try {
-            if (!overviewInterval[socket.id]) {
-                overviewInterval[socket.id] = setInterval(async () => {
-                    const tagValues = deviceHandler.datas
-                    const tags = tagOverview
-                    let tagnames = await TagnameModel.find({
-                        name: { $in: tags },
-                    })
-                        .select({
-                            name: 1,
-                            symbol: 1,
-                            unit: 1,
-                        })
-                        .lean()
-
-                    const tagnameValues = tagnames.map((tag) => ({
-                        ...tag,
-                        values: tagValues[tag._id?.toString()] ?? null,
-                    }))
-
-                    const pcs1Soc = tagnameValues.find(
-                        (tag) => tag.name === 'pcs1BmsSoc',
-                    )
-                    const pcs2Soc = tagnameValues.find(
-                        (tag) => tag.name === 'pcs2BmsSoc',
-                    )
-                    const socMaxTag = tagnameValues.find(
-                        (tag) => tag.name === 'chargeCutOff',
-                    )
-                    const socMinTag = tagnameValues.find(
-                        (tag) => tag.name === 'dischargeCutOff',
-                    )
-
-                    const pcs1CurrentSOC = pcs1Soc ? pcs1Soc.values : 0
-                    const pcs2CurrentSOC = pcs2Soc ? pcs2Soc.values : 0
-                    const SOC_MAX = socMaxTag ? socMaxTag.values : 0
-                    const SOC_MIN = socMinTag ? socMinTag.values : 0
-
-                    const pcs1ChargeableValue =
-                        (SOC_MAX - pcs1CurrentSOC) * CAPACITY
-                    const pcs1DischargeableValue =
-                        (pcs1CurrentSOC - SOC_MIN) * CAPACITY
-
-                    const pcs2ChargeableValue =
-                        (SOC_MAX - pcs2CurrentSOC) * CAPACITY
-                    const pcs2DischargeableValue =
-                        (pcs2CurrentSOC - SOC_MIN) * CAPACITY
-
-                    tagnameValues.push(
-                        {
-                            name: 'pcs1Chargeable',
-                            symbol: 'Chargeable',
-                            unit: 'kWh',
-                            values: pcs1ChargeableValue,
-                        },
-                        {
-                            name: 'pcs1Dischargeable',
-                            symbol: 'Dischargeable',
-                            unit: 'kWh',
-                            values: pcs1DischargeableValue,
-                        },
-                        {
-                            name: 'pcs2Chargeable',
-                            symbol: 'Chargeable',
-                            unit: 'kWh',
-                            values: pcs2ChargeableValue,
-                        },
-                        {
-                            name: 'pcs2Dischargeable',
-                            symbol: 'Dischargeable',
-                            unit: 'kWh',
-                            values: pcs2DischargeableValue,
-                        },
-                    )
-                    socket.emit('SERVER SEND OVERVIEW VALUE', tagnameValues)
-                }, TIME)
-            }
-        } catch (error) {
-            logger.error(error)
-        }
-    })
-
     socket.on('CLIENT GET SINGLERACK INFO', async () => {
         try {
             if (!singleRackInterval[socket.id]) {
@@ -296,219 +213,65 @@ const connectSocket = (socket) => {
         }
     })
 
-    socket.on('CLIENT GET PCSALARM INFO', async () => {
-        try {
-            const PCS_ALARM_TAGS = tagPCSAlarm
-            if (!pcsAlarmInterval[socket.id]) {
-                pcsAlarmInterval[socket.id] = setInterval(async () => {
-                    const tagValues = deviceHandler.datas
-
-                    let tagnames = await TagnameModel.find({
-                        name: { $in: PCS_ALARM_TAGS },
-                    })
-                        .select({
-                            name: 1,
-                            symbol: 1,
-                            unit: 1,
-                        })
-                        .lean()
-
-                    const tagnameValues = tagnames.map((tag) => ({
-                        ...tag,
-                        values: tagValues[tag._id?.toString()] ?? null,
-                    }))
-
-                    socket.emit('SERVER SEND PCSALARM VALUE', tagnameValues)
-                }, TIME)
-            }
-        } catch (error) {
-            logger.error(error)
-        }
-    })
-
-    socket.on('CLIENT GET PCSALARM_2 INFO', async () => {
-        try {
-            const PCS_ALARM_TAGS = tagPCSAlarm_2
-            if (!pcsAlarmInterval_2[socket.id]) {
-                pcsAlarmInterval_2[socket.id] = setInterval(async () => {
-                    const tagValues = deviceHandler.datas
-
-                    let tagnames = await TagnameModel.find({
-                        name: { $in: PCS_ALARM_TAGS },
-                    })
-                        .select({
-                            name: 1,
-                            symbol: 1,
-                            unit: 1,
-                        })
-                        .lean()
-
-                    const tagnameValues = tagnames.map((tag) => ({
-                        ...tag,
-                        values: tagValues[tag._id?.toString()] ?? null,
-                    }))
-
-                    socket.emit('SERVER SEND PCSALARM_2 VALUE', tagnameValues)
-                }, TIME)
-            }
-        } catch (error) {
-            logger.error(error)
-        }
-    })
-
-    //TAB GRID
-    socket.on('CLIENT GET GRID INFO', async () => {
-        try {
-            const PCS_ALARM_TAGS = tagGrid
-            if (!gridInterval[socket.id]) {
-                gridInterval[socket.id] = setInterval(async () => {
-                    const tagValues = deviceHandler.datas
-
-                    let tagnames = await TagnameModel.find({
-                        name: { $in: PCS_ALARM_TAGS },
-                    })
-                        .select({
-                            name: 1,
-                            symbol: 1,
-                            unit: 1,
-                        })
-                        .lean()
-
-                    const tagnameValues = tagnames.map((tag) => ({
-                        ...tag,
-                        values: tagValues[tag._id?.toString()] ?? null,
-                    }))
-
-                    const currentDraw = tagnameValues
-                        .filter((tag) =>
-                            [
-                                'gridCurrentPh1',
-                                'gridCurrentPh2',
-                                'gridCurrentPh3',
-                            ].includes(tag.name),
-                        )
-                        .reduce((acc, cur) => acc + (cur.values ?? 0), 0)
-
-                    tagnameValues.push({
-                        name: 'currentDraw',
-                        symbol: 'Current Draw',
-                        unit: '',
-                        values: currentDraw,
-                    })
-
-                    socket.emit('SERVER SEND GRID VALUE', tagnameValues)
-                }, TIME)
-            }
-        } catch (error) {
-            logger.error(error)
-        }
-    })
-
-    //TAB GENSET
-    socket.on('CLIENT GET GENSET INFO', async () => {
-        try {
-            const PCS_ALARM_TAGS = tagGenset
-            if (!gensetInterval[socket.id]) {
-                gensetInterval[socket.id] = setInterval(async () => {
-                    const tagValues = deviceHandler.datas
-
-                    let tagnames = await TagnameModel.find({
-                        name: { $in: PCS_ALARM_TAGS },
-                    })
-                        .select({
-                            name: 1,
-                            symbol: 1,
-                            unit: 1,
-                        })
-                        .lean()
-
-                    const tagnameValues = tagnames.map((tag) => ({
-                        ...tag,
-                        values: tagValues[tag._id?.toString()] ?? null,
-                    }))
-
-                    socket.emit('SERVER SEND GENSET VALUE', tagnameValues)
-                }, TIME)
-            }
-        } catch (error) {
-            logger.error(error)
-        }
-    })
-
     //Client sent data DEVICE
-    socket.on('CLIENT GET DEVICE INFO', async () => {
+    socket.on('device:getStatus', async () => {
         try {
             if (!devicesInterval[socket.id]) {
                 devicesInterval[socket.id] = setInterval(async () => {
-                    const connectionDevice =
-                        await deviceHandler.connectionDevice
-                    socket.emit('SERVER SEND DEVICE VALUE', connectionDevice)
-                }, TIME)
+                    const connectionDevice = await deviceHandler.connectionDevice
+                    socket.emit('SERVER SEND DEVICE STATUS', connectionDevice)
+                }, 1000) //1s
             }
         } catch (error) {
             logger.error(error)
         }
     })
 
-    socket.on('CLIENT GET BATTERYGROUP INFO', async () => {
+    socket.on('tag:getValueOverview', async () => {
         try {
-            const BATTERYGROUP_TAGS = batteryGroup
-            if (!pcsBatteryGroup[socket.id]) {
-                pcsBatteryGroup[socket.id] = setInterval(async () => {
-                    const tagValues = deviceHandler.datas
+            if (!overviewInterval[socket.id]) {
+                overviewInterval[socket.id] = setInterval(async () => {
+                    const tagValues = deviceHandler.datas;
+                    const tags = tagOverview;
 
                     let tagnames = await TagnameModel.find({
-                        name: { $in: BATTERYGROUP_TAGS },
+                        name: { $in: tags },
                     })
                         .select({
                             name: 1,
                             symbol: 1,
                             unit: 1,
+                            deviceId: 1,
                         })
-                        .lean()
+                        .lean();
 
+                    // 1. Tạo mảng dữ liệu có kèm values
                     const tagnameValues = tagnames.map((tag) => ({
                         ...tag,
                         values: tagValues[tag._id?.toString()] ?? null,
-                    }))
+                    }));
 
-                    socket.emit('SERVER SEND BATTERYGROUP VALUE', tagnameValues)
-                }, TIME)
+                    // 2. Nhóm theo deviceId
+                    const groupedData = tagnameValues.reduce((acc, tag) => {
+                        const id = tag.deviceId ? tag.deviceId.toString() : 'unknown';
+                        if (!acc[id]) {
+                            acc[id] = [];
+                        }
+                        acc[id].push(tag);
+                        return acc;
+                    }, {});
+
+                    // Gửi dữ liệu đã nhóm lên client
+                    socket.emit('SERVER SEND OVERVIEW VALUE', groupedData);
+
+                }, TIME);
             }
         } catch (error) {
-            logger.error(error)
+            logger.error(error);
         }
-    })
+    });
 
-    socket.on('CLIENT GET CONTROLMODE INFO', async () => {
-        try {
-            const TAGS = ['chargeMode', 'chargeLimit', 'dischargeLimit']
-            if (!controlModeInterval[socket.id]) {
-                controlModeInterval[socket.id] = setInterval(async () => {
-                    const tagValues = deviceHandler.datas
 
-                    let tagnames = await TagnameModel.find({
-                        name: { $in: TAGS },
-                    })
-                        .select({
-                            name: 1,
-                            symbol: 1,
-                            unit: 1,
-                        })
-                        .lean()
-
-                    const tagnameValues = tagnames.map((tag) => ({
-                        ...tag,
-                        values: tagValues[tag._id?.toString()] ?? null,
-                    }))
-
-                    socket.emit('SERVER SEND CONTROLMODE VALUE', tagnameValues)
-                }, TIME)
-            }
-        } catch (error) {
-            logger.error(error)
-        }
-    })
 
     socket.on('disconnect', (data) => {
         logger.info('[Socket] Client đã kết thúc')

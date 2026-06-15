@@ -2,7 +2,7 @@ const { logger } = require('../config/loggerConfig')
 const TagnameModel = require('../models/tagname')
 
 async function tagnameSeeder() {
-    await TagnameModel.deleteMany({})
+    // await TagnameModel.deleteMany({})
     await TagnameModel.insertMany([
         //ADDRESS WORKING
         {

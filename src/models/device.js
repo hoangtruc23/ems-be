@@ -1,6 +1,10 @@
 const { Schema, model } = require('mongoose')
 
 const deviceSchema = new Schema({
+    deviceCode: {
+        type: String,
+        required: true,
+    },
     deviceName: {
         type: String,
         required: true,
@@ -9,16 +13,14 @@ const deviceSchema = new Schema({
         type: String,
         required: true,
     },
-    host: {
+    protocol: {
         type: String,
-        default: null,
+        required: true,
+        enum: ["modbus_tcp", "modbus_rtu", "siemens_s7"]
     },
-    port: {
-        type: String,
-        default: null,
-    },
-    slaveId: {
-        type: Number,
+    //845 -> RTU -> 
+    config: {
+        type: Schema.Types.Mixed,
         required: true,
     },
     isEnable: {
@@ -26,6 +28,7 @@ const deviceSchema = new Schema({
         required: true,
         default: false,
     },
+
 })
 
 const DeviceModel = model('devices', deviceSchema, 'devices')
