@@ -232,10 +232,15 @@ const connectSocket = (socket) => {
             if (!overviewInterval[socket.id]) {
                 overviewInterval[socket.id] = setInterval(async () => {
                     const tagValues = deviceHandler.datas;
-                    const tags = tagOverview;
+                    // console.log(tagValues);
+                    // const tags = tagOverview;
 
+                    // const regexPattern = new RegExp(tags.join('|'), 'i');
+                    
+                    // Get tag visible in overview 
                     let tagnames = await TagnameModel.find({
-                        name: { $in: tags },
+                        // name: { $regex: regexPattern },
+                        isOverviewVisible: true,
                     })
                         .select({
                             name: 1,
