@@ -4,7 +4,8 @@ const response = require('../utils/response/response')
 const userController = {
     getAll: async (req, res, next) => {
         try {
-            const result = await userService.getAll()
+            const { search, page, limit } = req.query;
+            const result = await userService.getAll({ search, page, limit })
             return res.status(200).json(response.success(result))
         } catch (error) {
             next(error)
@@ -31,6 +32,16 @@ const userController = {
         try {
             const { userId } = req.params
             const result = await userService.update(userId, req.body)
+            return res.status(200).json(response.success(result))
+        } catch (error) {
+            next(error)
+        }
+    },
+    updateProfile: async (req, res, next) => {
+        try {
+            const userId = req.user?._id || req.user?.id || req.userId;
+
+            const result = await userService.updateProfile(userId, req.body)
             return res.status(200).json(response.success(result))
         } catch (error) {
             next(error)

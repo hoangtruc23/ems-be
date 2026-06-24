@@ -4,12 +4,40 @@ const errorCode = require('../utils/response/errorCode')
 const bcrypt = require('bcryptjs')
 
 const userService = {
-    getAll: () => {
+    getAll: async (query) => {
         try {
-            const data = UserModel.find({}, { password: 0, __v: 0 })
-            return data
+            const search = query.search || '';
+            const page = parseInt(query.page) || 1;
+            const limit = parseInt(query.limit) || 10;
+
+            const skip = (page - 1) * limit;
+
+            const filter = {};
+            if (search) {
+                filter.username = { $regex: search, $options: 'i' }; 
+            }
+
+            const [users, totalItems] = await Promise.all([
+                UserModel.find(filter, { password: 0, __v: 0 })
+                    .skip(skip)
+                    .limit(limit)
+                    .lean(),
+                UserModel.countDocuments(filter)
+            ]);
+
+            const totalPages = Math.ceil(totalItems / limit);
+
+            return {
+                users,
+                pagination: {
+                    totalItems,
+                    totalPages,
+                    currentPage: page,
+                    limit
+                }
+            };
         } catch (error) {
-            throw error
+            throw error;
         }
     },
     create: async (user) => {
@@ -70,6 +98,28 @@ const userService = {
             throw error
         }
     },
+    updateProfile: async (userId, user) => {
+        try {
+            const { username } = user
+
+            const data = await UserModel.findByIdAndUpdate(
+                userId,
+                { username },
+                {
+                    new: true,
+                    projection: { password: 0, __v: 0 },
+                },
+            )
+
+            if (!data) {
+                throw new BadReq(errorCode.USER_NOT_FOUND)
+            }
+
+            return data
+        } catch (error) {
+            throw error
+        }
+    },
     delete: async (userId) => {
         try {
             await UserModel.findByIdAndDelete(userId)
@@ -82,6 +132,9 @@ const userService = {
     changePassword: async (userId, user) => {
         try {
             const { passwordNew } = user
+            if(!passwordNew){
+                throw new BadReq(errorCode.PASSWORD_REQUIRED)
+            }
             const findUser = await UserModel.findById(userId)
 
             if (!findUser) {
