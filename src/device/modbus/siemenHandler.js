@@ -47,6 +47,7 @@ function SiemenHandler(device) {
                 this.connect()
             }, 5000)
             logger.error(error)
+            throw error
         }
     }
 
