@@ -50,6 +50,10 @@ const tagnameSchema = new Schema({
     note: {
         type: String,
     },
+    isOverviewVisible: {
+        type: Boolean,
+        default: false,
+    }
 })
 
 tagnameSchema.index({ deviceId: 1, name: 1 });
