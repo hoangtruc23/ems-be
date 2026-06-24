@@ -46,8 +46,12 @@ const authService = {
     },
     logout: async (payloadToken) => {
         try {
+
+            const userId = payloadToken.user?._id; 
+            const timestamp = payloadToken.ts;
+
             await clientRedis.del(
-                `${constant.REDIS_PREFIX_ACCESS_TOKEN}_${payloadToken.user}_${payloadToken.ts}`,
+                `${constant.REDIS_PREFIX_ACCESS_TOKEN}_${userId}_${timestamp}`,
             )
             return null
         } catch (error) {
