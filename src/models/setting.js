@@ -13,6 +13,10 @@ const settingSchema = new Schema({
         type: Buffer,
         required: false,
     },
+    logoContentType: {
+        type: String,
+        required: false,
+    }
 })
 
 const SettingModel = model('settings', settingSchema, 'settings')
