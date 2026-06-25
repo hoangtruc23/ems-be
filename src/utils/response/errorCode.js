@@ -42,6 +42,10 @@ const errorCode = {
     INVALID_TOKEN: {
         code: 12,
         message: 'Token không hợp lệ',
+    },
+    LOGO_NOT_FOUND: {
+        code: 13,
+        message: 'Không tìm thấy logo',
     }
 }
 
