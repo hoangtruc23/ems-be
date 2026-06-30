@@ -14,21 +14,34 @@ const userService = {
 
             const filter = {};
             if (search) {
-                filter.username = { $regex: search, $options: 'i' }; 
+                filter.$or = [
+                    { username: { $regex: search, $options: 'i' } },
+                    { fullname: { $regex: search, $options: 'i' } }
+                ];
             }
 
             const [users, totalItems] = await Promise.all([
                 UserModel.find(filter, { password: 0, __v: 0 })
                     .skip(skip)
                     .limit(limit)
+                    .populate('role', 'name')
                     .lean(),
                 UserModel.countDocuments(filter)
             ]);
 
+            const formattedUsers = users.map(user => {
+                if (user.role && user.role.name) {
+                    user.role = user.role.name; 
+                } else {
+                    user.role = null;
+                }
+                return user;
+            });
+
             const totalPages = Math.ceil(totalItems / limit);
 
             return {
-                users,
+                users: formattedUsers,
                 pagination: {
                     totalItems,
                     totalPages,
@@ -42,7 +55,7 @@ const userService = {
     },
     create: async (user) => {
         try {
-            const { username, password, role } = user
+            const { fullname, username, password, role } = user
             const checkUsername = await UserModel.findOne({ username })
             if (checkUsername) {
                 throw new BadReq(errorCode.USER_EXISTED)
@@ -51,6 +64,7 @@ const userService = {
             const hashPass = await bcrypt.hash(password, 10)
 
             await UserModel.create({
+                fullname,
                 username,
                 password: hashPass,
                 role,
@@ -67,9 +81,17 @@ const userService = {
                 password: 0,
                 __v: 0,
             })
+            .populate('role', 'name')
+            .lean()
 
             if (!data) {
                 throw new BadReq(errorCode.USER_NOT_FOUND)
+            }
+
+            if (data.role && data.role.name) {
+                data.role = data.role.name;
+            } else {
+                data.role = null;
             }
 
             return data
@@ -79,19 +101,40 @@ const userService = {
     },
     update: async (userId, user) => {
         try {
-            const { username, role } = user
+            const { fullname, username, role } = user
 
-            const data = await UserModel.findByIdAndUpdate(
+            if (username) {
+                const checkUsername = await UserModel.findOne({ username, _id: { $ne: userId } })
+                if (checkUsername) {
+                    throw new BadReq(errorCode.USER_EXISTED)
+                }
+            }
+
+            let data = await UserModel.findByIdAndUpdate(
                 userId,
                 {
+                    fullname,
                     username,
-                    role,
+                    role,   
                 },
                 {
                     new: true,
                     projection: { password: 0, __v: 0 },
                 },
             )
+
+            if (!data) {
+                throw new BadReq(errorCode.USER_NOT_FOUND)
+            }
+
+            data = await data.populate('role', 'name');
+            const dataObj = data.toObject();
+
+            if (dataObj.role && dataObj.role.name) {
+                dataObj.role = dataObj.role.name;
+            } else {
+                dataObj.role = null;
+            }
 
             return data
         } catch (error) {
@@ -100,11 +143,18 @@ const userService = {
     },
     updateProfile: async (userId, user) => {
         try {
-            const { username } = user
+            const { fullname, username } = user
+
+            if (username) {
+                const checkUsername = await UserModel.findOne({ username, _id: { $ne: userId } })
+                if (checkUsername) {
+                    throw new BadReq(errorCode.USER_EXISTED)
+                }
+            }
 
             const data = await UserModel.findByIdAndUpdate(
                 userId,
-                { username },
+                { fullname, username },
                 {
                     new: true,
                     projection: { password: 0, __v: 0 },

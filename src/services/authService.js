@@ -63,11 +63,20 @@ const authService = {
             const user = await UserModel.findById(currentUser._id, {
                 password: 0,
                 __v: 0,
-            }).lean()
+            })
+            .populate('role', 'name')
+            .lean()
 
             if (!user) {
                 throw new BadReq(errorCode.USER_NOT_FOUND)
             }
+
+            if (user.role && user.role.name) {
+                user.role = user.role.name;
+            } else {
+                user.role = null;
+            }
+
             return user
         } catch (error) {
             throw error
