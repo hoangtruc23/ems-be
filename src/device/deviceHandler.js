@@ -221,8 +221,8 @@ function DeviceHandler() {
                                                     value = value * tag.gain + tag.offset;
                                                 }
                                             }
-                                            // this.datas[tag.name] = value;
-                                            this.datas[tag._id.toString()] = value;
+                                            this.datas[tag.name] = value;
+                                            // this.datas[tag._id.toString()] = value;
                                         });
                                     }
                                 } catch (err) {

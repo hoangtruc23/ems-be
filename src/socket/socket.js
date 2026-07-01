@@ -233,28 +233,42 @@ const connectSocket = (socket) => {
                 overviewInterval[socket.id] = setInterval(async () => {
                     const tagValues = deviceHandler.datas;
                     // console.log(tagValues);
-                    // const tags = tagOverview;
+                    const tags = tagOverview;
 
-                    // const regexPattern = new RegExp(tags.join('|'), 'i');
+                    const regexPattern = new RegExp(tags.join('|'), 'i');
                     
-                    // Get tag visible in overview 
                     let tagnames = await TagnameModel.find({
-                        // name: { $regex: regexPattern },
-                        isOverviewVisible: true,
+                        name: { $regex: regexPattern },
                     })
-                        .select({
-                            name: 1,
-                            symbol: 1,
-                            unit: 1,
-                            deviceId: 1,
-                        })
-                        .lean();
+                    .select({
+                        name: 1,
+                        symbol: 1,
+                        unit: 1,
+                        deviceId: 1,
+                    })
+                    .lean();
 
                     // 1. Tạo mảng dữ liệu có kèm values
-                    const tagnameValues = tagnames.map((tag) => ({
-                        ...tag,
-                        values: tagValues[tag._id?.toString()] ?? null,
-                    }));
+                    const tagnameValues = tagnames.map((tag) => {
+                        let standardName = tag.name; 
+                        const lowerName = tag.name.toLowerCase();
+
+                        if (lowerName.includes('current')) {
+                            standardName = 'current';
+                        } else if (lowerName.includes('voltage')) {
+                            standardName = 'voltage';
+                        } else if (lowerName.includes('factor') || lowerName.includes('cos')) {
+                            standardName = 'powerFactor';
+                        } else if (lowerName.includes('load')) {
+                            standardName = 'load';
+                        }
+
+                        return {
+                            ...tag,
+                            name: standardName, 
+                            values: tagValues[tag.name] ?? null, 
+                        };
+                    });
 
                     // 2. Nhóm theo deviceId
                     const groupedData = tagnameValues.reduce((acc, tag) => {

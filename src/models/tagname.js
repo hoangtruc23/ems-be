@@ -49,10 +49,6 @@ const tagnameSchema = new Schema({
     },
     note: {
         type: String,
-    },
-    isOverviewVisible: {
-        type: Boolean,
-        default: false,
     }
 })
 
