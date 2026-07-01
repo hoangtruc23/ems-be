@@ -6,8 +6,9 @@ const alarmSchema = new Schema({
         required: true,
     },
     time: {
-        type: String,
+        type: Date,
         required: true,
+        default: Date.now 
     },
     title: {
         type: String,
@@ -18,6 +19,8 @@ const alarmSchema = new Schema({
     },
     severity: {
         type: String,
+        enum: [0, 1, 2],
+        default: 0,
         required: true,
     },
     note: {
