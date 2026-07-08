@@ -11,6 +11,7 @@ const {
     tagMonitoringPCS,
     tagGrid,
     tagGenset,
+    trendSummary,
 } = require('../utils/constant/tagDashboard')
 const ControlHelper = require('../utils/control/controlHelper')
 
@@ -33,6 +34,7 @@ const connectSocket = (socket) => {
     let singleRackInterval = {}
     let pcsAlarmInterval = {}
     let overviewInterval = {}
+    let trendInterval = {}
     let pcsAlarmInterval_2 = {}
     let pcsBatteryGroup = {}
     let controlModeInterval = {}
@@ -213,6 +215,93 @@ const connectSocket = (socket) => {
         }
     })
 
+    socket.on('CLIENT GET TREND TOTAL VALUE', async (data) => { 
+        try {
+            //Filter meter  
+            const chosenDevices = data || [];
+
+            if (trendInterval[socket.id]) {
+                clearInterval(trendInterval[socket.id]);
+            }
+
+            if (chosenDevices.length === 0) {
+                socket.emit('SERVER SEND TREND TOTAL VALUE', {
+                    totalLiveLoad: 0, averageVoltage: 0, averageCurrent: 0, powerFactor: 0, frequency: 0
+                });
+                return;
+            }
+
+            trendInterval[socket.id] = setInterval(async () => {
+                const tagValues = deviceHandler.datas;
+                const tags = trendSummary;
+                const regexPattern = new RegExp(tags.join('|'), 'i');
+
+                let tagnames = await TagnameModel.find({
+                    name: { $regex: regexPattern },
+                })
+                .select({
+                    name: 1,
+                    symbol: 1,
+                    unit: 1,
+                    deviceId: 1,
+                })  
+                .lean();
+
+                const filteredTags = tagnames.filter(tag => 
+                    chosenDevices.includes(tag.deviceId?.toString())
+                );
+
+                let totalLoad = 0;
+                let totalVoltage = 0;
+                let totalCurrent = 0;
+                let totalPF = 0;
+                let totalFreq = 0;
+
+                let countVoltage = 0;
+                let countCurrent = 0;
+                let countPF = 0;
+                let countFreq = 0;
+
+                filteredTags.forEach((tag) => {
+                    const lowerName = tag.name.toLowerCase();
+                    const value = tagValues[tag.name] ?? 0;
+
+                    if (lowerName.includes('load')) {
+                        totalLoad += value; 
+                    } 
+                    else if (lowerName.includes('voltage')) {
+                        totalVoltage += value;
+                        countVoltage++;
+                    } 
+                    else if (lowerName.includes('current')) {
+                        totalCurrent += value;
+                        countCurrent++;
+                    } 
+                    else if (lowerName.includes('factor') || lowerName.includes('cos')) {
+                        totalPF += value;
+                        countPF++;
+                    }
+                    else if (lowerName.includes('freq') || lowerName.includes('hz')) {
+                        totalFreq += value;
+                        countFreq++;
+                    }
+                });
+                const finalResult = {
+                    totalLiveLoad: totalLoad,
+                    averageVoltage: countVoltage > 0 ? (totalVoltage / countVoltage) : 0,
+                    averageCurrent: countCurrent > 0 ? (totalCurrent / countCurrent) : 0,
+                    powerFactor: countPF > 0 ? (totalPF / countPF) : 0,
+                    frequency: countFreq > 0 ? (totalFreq / countFreq) : 0 
+                };
+
+                socket.emit('SERVER SEND TREND TOTAL VALUE', finalResult);
+            }, TIME);
+
+        } catch (error) {
+            logger.error(error);
+        }
+    });
+
     //Client sent data DEVICE
     socket.on('device:getStatus', async () => {
         try {
@@ -253,6 +342,7 @@ const connectSocket = (socket) => {
                         let standardName = tag.name; 
                         const lowerName = tag.name.toLowerCase();
 
+                        //Mapping 
                         if (lowerName.includes('current')) {
                             standardName = 'current';
                         } else if (lowerName.includes('voltage')) {
