@@ -23,9 +23,18 @@ const tagMeterSummary = [
     'powerFactor',
 ]
 
+const trendSummary = [
+    'load',
+    'current', 
+    'voltage',
+    'powerFactor',
+    'frequency'
+]
+
 module.exports = {
     tagDashboard,
     tagOverview,
     tagTrendPowerAnalysis,
-    tagMeterSummary
+    tagMeterSummary,
+    trendSummary
 }
