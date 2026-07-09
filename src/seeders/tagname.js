@@ -18,7 +18,6 @@ async function tagnameSeeder() {
             isSaveDb: true,
             isSendFtp: false,
             note: 'BESS voltage',
-            isOverviewVisible: true,
         },
         {
             name: 'bessCurrent',
@@ -33,7 +32,6 @@ async function tagnameSeeder() {
             isSaveDb: true,
             isSendFtp: false,
             note: 'BESS current',
-            isOverviewVisible: false,
         },
         {
             name: 'bessPower',
@@ -48,7 +46,6 @@ async function tagnameSeeder() {
             isSaveDb: true,
             isSendFtp: false,
             note: 'BESS power',
-            isOverviewVisible: true,
         },
         {
             name: 'bessSoc',
@@ -63,7 +60,6 @@ async function tagnameSeeder() {
             isSaveDb: true,
             isSendFtp: false,
             note: 'BESS state of charge',
-            isOverviewVisible: true,
         },
         {
             name: 'bessTemperature',
@@ -78,7 +74,6 @@ async function tagnameSeeder() {
             isSaveDb: true,
             isSendFtp: false,
             note: 'BESS temperature',
-            isOverviewVisible: true,
         },
 
         // Gateway - deviceId: 684bcaeb7cac1b319680bf0b
@@ -95,7 +90,6 @@ async function tagnameSeeder() {
             isSaveDb: true,
             isSendFtp: false,
             note: 'Gateway voltage',
-            isOverviewVisible: true,
         },
         {
             name: 'gatewayCurrent',
@@ -110,7 +104,6 @@ async function tagnameSeeder() {
             isSaveDb: true,
             isSendFtp: false,
             note: 'Gateway current',
-            isOverviewVisible: true,
         },
         {
             name: 'gatewayPower',
@@ -125,7 +118,6 @@ async function tagnameSeeder() {
             isSaveDb: true,
             isSendFtp: false,
             note: 'Gateway power',
-            isOverviewVisible: true,
         },
         {
             name: 'gatewayFrequency',
@@ -140,7 +132,6 @@ async function tagnameSeeder() {
             isSaveDb: true,
             isSendFtp: false,
             note: 'Gateway frequency',
-            isOverviewVisible: false,
         },
         {
             name: 'gatewayPowerFactor',
@@ -155,7 +146,6 @@ async function tagnameSeeder() {
             isSaveDb: true,
             isSendFtp: false,
             note: 'Gateway power factor',
-            isOverviewVisible: true,
         },
 
         // Meter - deviceId: 684bcaeb7cac1b319680bf0c
@@ -172,7 +162,6 @@ async function tagnameSeeder() {
             isSaveDb: true,
             isSendFtp: false,
             note: 'Meter voltage',
-            isOverviewVisible: true,
         },
         {
             name: 'meterCurrent',
@@ -187,7 +176,6 @@ async function tagnameSeeder() {
             isSaveDb: true,
             isSendFtp: false,
             note: 'Meter current',
-            isOverviewVisible: true,
         },
         {
             name: 'meterActivePower',
@@ -202,7 +190,6 @@ async function tagnameSeeder() {
             isSaveDb: true,
             isSendFtp: false,
             note: 'Meter active power',
-            isOverviewVisible: true,
         },
         {
             name: 'meterEnergyImport',
@@ -217,7 +204,6 @@ async function tagnameSeeder() {
             isSaveDb: true,
             isSendFtp: false,
             note: 'Meter import energy',
-            isOverviewVisible: true,
         },
         {
             name: 'meterEnergyExport',
@@ -232,7 +218,6 @@ async function tagnameSeeder() {
             isSaveDb: true,
             isSendFtp: false,
             note: 'Meter export energy',
-            isOverviewVisible: false,
         },
     ])
         .then(() => {
