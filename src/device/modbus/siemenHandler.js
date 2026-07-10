@@ -1,6 +1,7 @@
 const nodes7 = require('nodes7')
 const { CronJob } = require('cron')
 const { logger } = require('../../config/loggerConfig')
+const TagnameModel = require('../../models/tagname')
 
 // const PlcConfigModel = require('../models/plcConfig')
 // const { getAllPlcAddress, saveSensorValue } = require('../utils/helper/plc')
@@ -43,10 +44,8 @@ function SiemenHandler(device) {
                 )
             })
         } catch (error) {
-            setTimeout(() => {
-                this.connect()
-            }, 5000)
             logger.error(error)
+            throw error
         }
     }
 
@@ -70,35 +69,30 @@ function SiemenHandler(device) {
             if (!this.s7Client) {
                 throw new Error('[SIEMEN] Chưa kết nối được đến thiết bị')
             }
-            setInterval(async () => {
-                const ts = Date.now()
-                let saveToDbDatas = []
-                const nodeS7Addresses = await getAllPlcAddress()
-                this.s7Client.removeItems()
+            const tags = await TagnameModel.find({ deviceId: this.device._id }).lean()
+            const nodeS7Addresses = tags.map(t => t.address).filter(Boolean)
+            if (nodeS7Addresses.length === 0) {
                 nodeS7Addresses.push('I0.1', 'I0.3', 'I0.6', 'I1.1', 'I18.5')
-                this.s7Client.addItems(nodeS7Addresses)
-                this.s7Client.readAllItems(async (err, data) => {
-                    if (err) {
-                        this.data = null
-                        this.status = false
-                    } else {
-                        if (!this.status) {
-                            // Get streamConfig để set streamConfig xuống PLC khi connect lại
-                            const streamConfigCache = await clientRedis.get(
-                                constant.STREAM_CONFIG_CACHE,
-                            )
-                            const streamConfig = JSON.parse(streamConfigCache)
-                            this.writeData(
-                                streamConfig.sampleCycle.address,
-                                streamConfig.sampleCycle.value,
-                            )
+            }
+
+            setInterval(async () => {
+                try {
+                    this.s7Client.removeItems()
+                    this.s7Client.addItems(nodeS7Addresses)
+                    this.s7Client.readAllItems(async (err, data) => {
+                        if (err) {
+                            this.data = null
+                            this.status = false
+                        } else {
+                            this.status = true
+                            this.alarmDisconnect = false
+                            this.data = data
                         }
-                        this.status = true
-                        this.alarmDisconnect = false
-                        this.data = data
-                    }
-                })
-            }, 500)
+                    })
+                } catch (err) {
+                    logger.error('[SIEMEN] readAllItems error', err)
+                }
+            }, 5000)
         } catch (error) {
             logger.error(error)
         }
