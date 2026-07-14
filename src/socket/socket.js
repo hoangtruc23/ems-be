@@ -1,6 +1,7 @@
 const { logger } = require('../config/loggerConfig')
 const DeviceHandler = require('../device/deviceHandler')
 const TagnameModel = require('../models/tagname')
+const trendService = require('../services/trendService')
 const {
     tagDashboard,
     tagSingleRack,
@@ -35,6 +36,7 @@ const connectSocket = (socket) => {
     let pcsAlarmInterval = {}
     let overviewInterval = {}
     let trendInterval = {}
+    let trendLoadInterval = {}
     let pcsAlarmInterval_2 = {}
     let pcsBatteryGroup = {}
     let controlModeInterval = {}
@@ -224,14 +226,16 @@ const connectSocket = (socket) => {
                 clearInterval(trendInterval[socket.id]);
             }
 
-            if (chosenDevices.length === 0) {
-                socket.emit('SERVER SEND TREND TOTAL VALUE', {
-                    totalLiveLoad: 0, averageVoltage: 0, averageCurrent: 0, powerFactor: 0, frequency: 0
-                });
-                return;
-            }
 
             trendInterval[socket.id] = setInterval(async () => {
+
+                if (chosenDevices.length === 0) {
+                    socket.emit('SERVER SEND TREND TOTAL VALUE', {
+                        totalLiveLoad: 0, averageVoltage: 0, averageCurrent: 0, powerFactor: 0, frequency: 0
+                    });
+                    return;
+                }
+
                 const tagValues = deviceHandler.datas;
                 const tags = trendSummary;
                 const regexPattern = new RegExp(tags.join('|'), 'i');
@@ -301,6 +305,64 @@ const connectSocket = (socket) => {
             logger.error(error);
         }
     });
+
+    socket.on('CLIENT GET TREND LOAD CHART', async (data) => {
+        try {
+            const { deviceIds = [], timeRange = '15m' } = data || {};
+
+            if (trendLoadInterval[socket.id]) {
+                clearInterval(trendLoadInterval[socket.id])
+            }
+
+            const calculateTimeRange = (range) => {
+                const endTime = new Date(); 
+                const endTs = endTime.getTime();
+                let startTs = endTs;
+
+                switch (range) {
+                    case '15m':
+                        startTs = endTs - (15 * 60 * 1000);
+                        break;
+                    case '1H':
+                        startTs = endTs - (1 * 60 * 60 * 1000);
+                        break;
+                    case '6H':
+                        startTs = endTs - (6 * 60 * 60 * 1000); 
+                        break;
+                    case '24H':
+                    default:
+                        startTs = endTs - (24 * 60 * 60 * 1000); 
+                        break;
+                }
+
+                return {
+                    startTime: new Date(startTs).toISOString(),
+                    endTime: endTime.toISOString()
+                };
+            };
+
+            trendLoadInterval[socket.id] = setInterval(async () => {
+                if (deviceIds.length === 0) {
+                    socket.emit('SERVER SEND TREND LOAD CHART', {
+                        timestamps: [],
+                        series: [],
+                    })
+                    return
+                }
+
+                const { startTime, endTime } = calculateTimeRange(timeRange);
+                
+                const result = await trendService.getAggregatedLoadChartData({
+                    deviceIds,
+                    startTime,
+                    endTime,
+                })
+                socket.emit('SERVER SEND TREND LOAD CHART', result)
+            }, TIME)
+        } catch (error) {
+            logger.error(error) 
+        }
+    })
 
     //Client sent data DEVICE
     socket.on('device:getStatus', async () => {
@@ -419,6 +481,12 @@ const connectSocket = (socket) => {
 
         clearInterval(statusZeroExportInterval[socket.id])
         delete statusZeroExportInterval[socket.id]
+
+        clearInterval(trendInterval[socket.id])
+        delete trendInterval[socket.id]
+
+        clearInterval(trendLoadInterval[socket.id])
+        delete trendLoadInterval[socket.id]
     })
 }
 module.exports = connectSocket
