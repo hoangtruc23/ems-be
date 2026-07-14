@@ -12,7 +12,8 @@ function MqttHandler(device, deviceHandler) {
     this.connect = async () => {
         return new Promise((resolve, reject) => {
             const { config } = this.device;
-            //URL giúp MQTT Client xác định giao thức và địa chỉ để kết nối tới MQTT
+            //brokerUrl là URL giúp MQTT Client xác định giao thức và địa chỉ để kết nối tới MQTT
+            // ví dụ: mqtt://192.168.1.100:1883
             const brokerUrl = config.host.includes('://') ? config.host : `mqtt://${config.host}`;
             const options = {
                 port: Number(config.port) || 1883,
@@ -37,6 +38,7 @@ function MqttHandler(device, deviceHandler) {
                     // Fetch tags for this device
                     this.tags = await TagnameModel.find({ deviceId: this.device._id }).lean();
                     const topics = this.tags.map(t => t.address).filter(Boolean);
+                    //Mỗi thiết bị là 1 topics
                     if (topics.length > 0) {
                         client.subscribe(topics, (err) => {
                             if (err) {
