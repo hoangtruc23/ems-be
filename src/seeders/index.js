@@ -16,10 +16,10 @@ async function run() {
                 await userSeeder()
                 break
             }
-            // case 'role': {
-            //     await roleSeeder()
-            //     break
-            // }
+            case 'role': {
+                await roleSeeder()
+                break
+            }
             case 'device': {
                 await deviceSeeder()
                 break
@@ -36,7 +36,7 @@ async function run() {
             case 'all': {
                 await userSeeder()
                 await settingSeeder()
-                // await roleSeeder()
+                await roleSeeder()
                 await deviceSeeder()
                 await tagnameSeeder()
                 await configFtpSeeder()

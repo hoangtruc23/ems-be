@@ -49,7 +49,7 @@ const tagnameSchema = new Schema({
     },
     note: {
         type: String,
-    },
+    }
 })
 
 tagnameSchema.index({ deviceId: 1, name: 1 });

@@ -1,6 +1,10 @@
 const { Schema, model } = require('mongoose')
 
 const userSchema = new Schema({
+    fullname: {
+        type: String,
+        required: false,
+    },
     username: {
         type: String,
         required: true,
@@ -11,10 +15,13 @@ const userSchema = new Schema({
     },
     role: {
         type: String,
-        required: true,
-        enum: ['root', 'admin', 'operator', 'guest'],
-        default: 'operator',
+        required: true
     },
+    // role: {
+    //     type: Schema.Types.ObjectId,
+    //     ref: 'roles',
+    //     required: true
+    // },
 })
 
 const UserModel = model('users', userSchema, 'users')

@@ -46,8 +46,12 @@ const authService = {
     },
     logout: async (payloadToken) => {
         try {
+
+            const userId = payloadToken.user?._id;
+            const timestamp = payloadToken.ts;
+
             await clientRedis.del(
-                `${constant.REDIS_PREFIX_ACCESS_TOKEN}_${payloadToken.user}_${payloadToken.ts}`,
+                `${constant.REDIS_PREFIX_ACCESS_TOKEN}_${userId}_${timestamp}`,
             )
             return null
         } catch (error) {
@@ -59,11 +63,14 @@ const authService = {
             const user = await UserModel.findById(currentUser._id, {
                 password: 0,
                 __v: 0,
-            }).lean()
+            })
+                // .populate('role', 'name')
+                .lean()
 
             if (!user) {
                 throw new BadReq(errorCode.USER_NOT_FOUND)
             }
+
             return user
         } catch (error) {
             throw error

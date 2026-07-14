@@ -6,9 +6,10 @@ const userController = require('../controllers/userController')
 router.get('/getAll', userController.getAll)
 router.get('/getUser/:userId', userController.getById)
 router.post('/create', userController.create)
+router.put('/update', userController.updateProfile)
 router.put('/update/:userId', userController.update)
 router.put('/changePassword/:userId', userController.changePassword)
-router.delete('/delete/{userId}', userController.delete)
+router.delete('/delete/:userId', userController.delete)
 
 module.exports = router
 
@@ -201,6 +202,55 @@ module.exports = router
  *                     role:
  *                       type: string
  *                       example: user
+ */
+
+/**
+ * @swagger
+ * /user/update:
+ * put:
+ * summary: Người dùng tự cập nhật thông tin cá nhân
+ * tags: [User]
+ * security:
+ * - bearerAuth: []
+ * requestBody:
+ * required: true
+ * content:
+ * application/json:
+ * schema:
+ * type: object
+ * properties:
+ * username:
+ * type: string
+ * example: my_new_name
+ * responses:
+ * 200:
+ * description: Cập nhật thông tin cá nhân thành công
+ * content:
+ * application/json:
+ * schema:
+ * type: object
+ * properties:
+ * status:
+ * type: integer
+ * example: 200
+ * code:
+ * type: integer
+ * example: 1
+ * message:
+ * type: string
+ * example: OK!
+ * data:
+ * type: object
+ * properties:
+ * _id:
+ * type: string
+ * example: 684686f736b60123f03418dd
+ * username:
+ * type: string
+ * example: my_new_name
+ * role:
+ * type: string
+ * example: user
  */
 
 /**

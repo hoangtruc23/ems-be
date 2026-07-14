@@ -3,6 +3,8 @@ const authService = require('../services/authService')
 const response = require('../utils/response/response')
 const { envConfig } = require('../config/envConfg')
 const userService = require('../services/userService')
+const BadReq = require('../utils/response/requestError')
+const errorCode = require('../utils/response/errorCode')
 
 const authController = {
     login: async (req, res, next) => {
@@ -17,6 +19,11 @@ const authController = {
     logout: async (req, res, next) => {
         try {
             const token = req.headers.authorization?.split(' ')[1]
+
+            if (!token) {
+                throw new BadReq(errorCode.INVALID_TOKEN);
+            }   
+            
             const payloadToken = jwt.verify(
                 token,
                 envConfig.JWT_ACCESS_TOKEN_PRIVATE_KEY,
@@ -37,8 +44,10 @@ const authController = {
     },
     changePassword: async (req, res, next) => {
         try {
+            const userId = req.user?._id || req.user?.id || req.userId;
+
             const result = await userService.changePassword(
-                req.userId,
+                userId,
                 req.body,
             )
             return res.status(200).json(response.success(result))

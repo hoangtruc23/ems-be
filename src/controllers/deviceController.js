@@ -10,6 +10,22 @@ const deviceController = {
             next(error)
         }
     },
+    getDeviceStats: async (req, res) => {
+        try {
+            const stats = await deviceService.getDeviceStats();
+            return res.status(200).json({
+                success: true,
+                message: "Get device statistics successfully",
+                data: stats
+            });
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Internal Server Error",
+                error: error.message
+            });
+        }
+    },
     getAllLocation: async (req, res, next) => {
         try {
             const result = await deviceService.getAllLocation()
@@ -34,6 +50,15 @@ const deviceController = {
             next(error)
         }
     },
+    delete: async (req, res, next) => {
+        try {
+            const { deviceId } = req.params
+            const result = await deviceService.delete(deviceId)
+            return res.status(200).json(response.success(result))
+        } catch (error) {
+            next(error)
+        }
+    }
 }
 
 module.exports = deviceController

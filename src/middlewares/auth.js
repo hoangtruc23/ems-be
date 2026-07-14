@@ -7,7 +7,8 @@ const { clientRedis } = require('../config/redisConfig')
 
 const authenticated = async (req, res, next) => {
     try {
-        if (req.originalUrl.split('?')[0].endsWith('login')) {
+        const requestPath = req.originalUrl.split('?')[0]
+        if (requestPath.endsWith('login') || requestPath.endsWith('/setting/logo')) {
             return next()
         }
         const { authorization } = req.headers

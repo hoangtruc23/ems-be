@@ -35,6 +35,18 @@ const errorCode = {
         code: 10,
         message: 'Không tìm thấy thiết bị!',
     },
+    PASSWORD_REQUIRED: {
+        code: 11,
+        message: 'Mật khẩu mới không được để trống!',
+    },
+    INVALID_TOKEN: {
+        code: 12,
+        message: 'Token không hợp lệ',
+    },
+    LOGO_NOT_FOUND: {
+        code: 13,
+        message: 'Không tìm thấy logo',
+    }
 }
 
 module.exports = errorCode

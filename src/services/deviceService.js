@@ -37,6 +37,31 @@ const deviceService = {
             throw error;
         }
     },
+    getDeviceStats: async () => {
+        try {
+            const [devices, connectedDevices] = await Promise.all([
+                DeviceModel.find({}, { _id: 1 }).lean(),
+                Promise.resolve(deviceHandler.connectionDevice || []),
+            ]);
+
+            const connectedMap = new Map(
+                connectedDevices.map((item) => [
+                    item.deviceId?.toString(),
+                    Boolean(item.connected),
+                ]),
+            );
+
+            const total = devices.length;
+            const online = devices.reduce((count, device) => {
+                return count + (connectedMap.get(device._id.toString()) ? 1 : 0);
+            }, 0);
+            const offline = total - online;
+
+            return { online, offline, total };
+        } catch (error) {
+            throw error;
+        }
+    },
     getAllLocation: async () => {
         try {
             // let { location } = query
@@ -88,6 +113,14 @@ const deviceService = {
             throw error
         }
     },
+    delete: async (deviceId) => {
+        try {
+            await DeviceModel.findByIdAndDelete(deviceId);
+            return null
+        } catch (error){
+            throw error
+        }
+    }
 
 }
 
