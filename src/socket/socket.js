@@ -231,7 +231,7 @@ const connectSocket = (socket) => {
 
                 if (chosenDevices.length === 0) {
                     socket.emit('SERVER SEND TREND TOTAL VALUE', {
-                        totalLiveLoad: 0, averageVoltage: 0, averageCurrent: 0, powerFactor: 0, frequency: 0
+                        totalLiveLoad: null, averageVoltage: null, averageCurrent: null, powerFactor: null, frequency: null
                     });
                     return;
                 }
@@ -255,6 +255,17 @@ const connectSocket = (socket) => {
                     chosenDevices.includes(tag.deviceId?.toString())
                 );
 
+                if (filteredTags.length === 0) {
+                    socket.emit('SERVER SEND TREND TOTAL VALUE', {
+                        totalLiveLoad: null,
+                        averageVoltage: null,
+                        averageCurrent: null,
+                        powerFactor: null,
+                        frequency: null
+                    });
+                    return;
+                }
+
                 let totalLoad = 0;
                 let totalVoltage = 0;
                 let totalCurrent = 0;
@@ -268,7 +279,9 @@ const connectSocket = (socket) => {
 
                 filteredTags.forEach((tag) => {
                     const lowerName = tag.name.toLowerCase();
-                    const value = tagValues[tag.name] ?? 0;
+                    const value = tagValues[tag.name];
+
+                    if (value === undefined || value === null) return;
 
                     if (lowerName.includes('load')) {
                         totalLoad += value; 
@@ -291,11 +304,11 @@ const connectSocket = (socket) => {
                     }
                 });
                 const finalResult = {
-                    totalLiveLoad: totalLoad,
-                    averageVoltage: countVoltage > 0 ? (totalVoltage / countVoltage) : 0,
-                    averageCurrent: countCurrent > 0 ? (totalCurrent / countCurrent) : 0,
-                    powerFactor: countPF > 0 ? (totalPF / countPF) : 0,
-                    frequency: countFreq > 0 ? (totalFreq / countFreq) : 0 
+                    totalLiveLoad: totalLoad > 0 ? totalLoad : null,
+                    averageVoltage: countVoltage > 0 ? (totalVoltage / countVoltage) : null,
+                    averageCurrent: countCurrent > 0 ? (totalCurrent / countCurrent) : null,
+                    powerFactor: countPF > 0 ? (totalPF / countPF) : null,
+                    frequency: countFreq > 0 ? (totalFreq / countFreq) : null
                 };
 
                 socket.emit('SERVER SEND TREND TOTAL VALUE', finalResult);
