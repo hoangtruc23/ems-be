@@ -187,92 +187,93 @@ const connectSocket = (socket) => {
                 clearInterval(trendInterval[socket.id]);
             }
 
+            const tags = trendSummary;
+            const regexPattern = new RegExp(tags.join('|'), 'i');
+            let tagnames = await TagnameModel.find({
+                name: { $regex: regexPattern },
+            })
+                .select({
+                    name: 1,
+                    symbol: 1,
+                    unit: 1,
+                    deviceId: 1,
+                })
+                .lean();
+            const filteredTags = tagnames.filter(tag =>
+                chosenDevices.includes(tag.deviceId?.toString())
+            );
 
             trendInterval[socket.id] = setInterval(async () => {
+                try {
+                    if (chosenDevices.length === 0) {
+                        socket.emit('SERVER SEND TREND TOTAL VALUE', {
+                            totalLiveLoad: null, averageVoltage: null, averageCurrent: null, powerFactor: null, frequency: null
+                        });
+                        return;
+                    }
 
-                if (chosenDevices.length === 0) {
-                    socket.emit('SERVER SEND TREND TOTAL VALUE', {
-                        totalLiveLoad: null, averageVoltage: null, averageCurrent: null, powerFactor: null, frequency: null
+                    const tagValues = deviceHandler.datas;
+
+                    if (filteredTags.length === 0) {
+                        socket.emit('SERVER SEND TREND TOTAL VALUE', {
+                            totalLiveLoad: null,
+                            averageVoltage: null,
+                            averageCurrent: null,
+                            powerFactor: null,
+                            frequency: null
+                        });
+                        return;
+                    }
+
+                    let totalLoad = 0;
+                    let totalVoltage = 0;
+                    let totalCurrent = 0;
+                    let totalPF = 0;
+                    let totalFreq = 0;
+
+                    let countVoltage = 0;
+                    let countCurrent = 0;
+                    let countPF = 0;
+                    let countFreq = 0;
+
+                    filteredTags.forEach((tag) => {
+                        const lowerName = tag.name.toLowerCase();
+                        const value = tagValues[tag._id?.toString()] ?? tagValues[tag.name] ?? null;
+
+                        if (value === undefined || value === null) return;
+
+                        if (lowerName.includes('load')) {
+                            totalLoad += value;
+                        }
+                        else if (lowerName.includes('voltage')) {
+                            totalVoltage += value;
+                            countVoltage++;
+                        }
+                        else if (lowerName.includes('current')) {
+                            totalCurrent += value;
+                            countCurrent++;
+                        }
+                        else if (lowerName.includes('factor') || lowerName.includes('cos')) {
+                            totalPF += value;
+                            countPF++;
+                        }
+                        else if (lowerName.includes('freq') || lowerName.includes('hz')) {
+                            totalFreq += value;
+                            countFreq++;
+                        }
                     });
-                    return;
+                    const finalResult = {
+                        totalLiveLoad: totalLoad > 0 ? totalLoad : null,
+                        averageVoltage: countVoltage > 0 ? (totalVoltage / countVoltage) : null,
+                        averageCurrent: countCurrent > 0 ? (totalCurrent / countCurrent) : null,
+                        powerFactor: countPF > 0 ? (totalPF / countPF) : null,
+                        frequency: countFreq > 0 ? (totalFreq / countFreq) : null
+                    };
+
+                    socket.emit('SERVER SEND TREND TOTAL VALUE', finalResult);
+                } catch (error) {
+                    logger.error(error);
                 }
-
-                const tagValues = deviceHandler.datas;
-                const tags = trendSummary;
-                const regexPattern = new RegExp(tags.join('|'), 'i');
-
-                let tagnames = await TagnameModel.find({
-                    name: { $regex: regexPattern },
-                })
-                    .select({
-                        name: 1,
-                        symbol: 1,
-                        unit: 1,
-                        deviceId: 1,
-                    })
-                    .lean();
-
-                const filteredTags = tagnames.filter(tag =>
-                    chosenDevices.includes(tag.deviceId?.toString())
-                );
-
-                if (filteredTags.length === 0) {
-                    socket.emit('SERVER SEND TREND TOTAL VALUE', {
-                        totalLiveLoad: null,
-                        averageVoltage: null,
-                        averageCurrent: null,
-                        powerFactor: null,
-                        frequency: null
-                    });
-                    return;
-                }
-
-                let totalLoad = 0;
-                let totalVoltage = 0;
-                let totalCurrent = 0;
-                let totalPF = 0;
-                let totalFreq = 0;
-
-                let countVoltage = 0;
-                let countCurrent = 0;
-                let countPF = 0;
-                let countFreq = 0;
-
-                filteredTags.forEach((tag) => {
-                    const lowerName = tag.name.toLowerCase();
-                    const value = tagValues[tag.name];
-
-                    if (value === undefined || value === null) return;
-
-                    if (lowerName.includes('load')) {
-                        totalLoad += value;
-                    }
-                    else if (lowerName.includes('voltage')) {
-                        totalVoltage += value;
-                        countVoltage++;
-                    }
-                    else if (lowerName.includes('current')) {
-                        totalCurrent += value;
-                        countCurrent++;
-                    }
-                    else if (lowerName.includes('factor') || lowerName.includes('cos')) {
-                        totalPF += value;
-                        countPF++;
-                    }
-                    else if (lowerName.includes('freq') || lowerName.includes('hz')) {
-                        totalFreq += value;
-                        countFreq++;
-                    }
-                });
-                const finalResult = {
-                    totalLiveLoad: totalLoad > 0 ? totalLoad : null,
-                    averageVoltage: countVoltage > 0 ? (totalVoltage / countVoltage) : null,
-                    averageCurrent: countCurrent > 0 ? (totalCurrent / countCurrent) : null,
-                    powerFactor: countPF > 0 ? (totalPF / countPF) : null,
-                    frequency: countFreq > 0 ? (totalFreq / countFreq) : null
-                };
-
-                socket.emit('SERVER SEND TREND TOTAL VALUE', finalResult);
             }, TIME);
 
         } catch (error) {
@@ -285,58 +286,76 @@ const connectSocket = (socket) => {
             const { deviceIds = [], timeRange = '15m' } = data || {};
 
             if (trendLoadInterval[socket.id]) {
-                clearInterval(trendLoadInterval[socket.id])
+                clearInterval(trendLoadInterval[socket.id]);
             }
+
 
             const calculateTimeRange = (range) => {
                 const endTime = new Date();
                 const endTs = endTime.getTime();
                 let startTs = endTs;
-
                 switch (range) {
-                    case '15m':
-                        startTs = endTs - (15 * 60 * 1000);
-                        break;
-                    case '1H':
-                        startTs = endTs - (1 * 60 * 60 * 1000);
-                        break;
-                    case '6H':
-                        startTs = endTs - (6 * 60 * 60 * 1000);
-                        break;
-                    case '24H':
-                    default:
-                        startTs = endTs - (24 * 60 * 60 * 1000);
-                        break;
+                    case '15m': startTs = endTs - (15 * 60 * 1000); break;
+                    case '1H': startTs = endTs - (1 * 60 * 60 * 1000); break;
+                    case '6H': startTs = endTs - (6 * 60 * 60 * 1000); break;
+                    case '24H': default: startTs = endTs - (24 * 60 * 60 * 1000); break;
                 }
-
-                return {
-                    startTime: new Date(startTs).toISOString(),
-                    endTime: endTime.toISOString()
-                };
+                return { startTime: new Date(startTs).toISOString(), endTime: endTime.toISOString() };
             };
 
-            trendLoadInterval[socket.id] = setInterval(async () => {
-                if (deviceIds.length === 0) {
-                    socket.emit('SERVER SEND TREND LOAD CHART', {
-                        timestamps: [],
-                        series: [],
-                    })
-                    return
+            const { startTime, endTime } = calculateTimeRange(timeRange);
+
+            let chartCache = await trendService.getAggregatedLoadChartData({
+                deviceIds,
+                startTime,
+                endTime,
+            });
+
+            socket.emit('SERVER SEND TREND LOAD CHART', chartCache);
+
+            const loadTags = await TagnameModel.find({
+                deviceId: { $in: deviceIds },
+                name: { $regex: /load/i }
+            }).select('_id name deviceId').lean();
+
+            trendLoadInterval[socket.id] = setInterval(() => {
+                try {
+                    if (deviceIds.length === 0) {
+                        socket.emit('SERVER SEND TREND LOAD CHART', { timestamps: [], series: [] });
+                        return;
+                    }
+
+                    const tagValues = deviceHandler.datas;
+                    const now = Date.now(); 
+
+                    chartCache.timestamps.push(now);
+
+                    chartCache.series.forEach(serie => {
+                        const tag = loadTags.find(t => t.deviceId.toString() === serie.deviceId);
+
+                        let liveVal = null;
+                        if (tag) {
+                            liveVal = tagValues[tag._id.toString()] ?? tagValues[tag.name] ?? null;
+                        }
+
+                        serie.data.push(liveVal); 
+                    });
+
+                    if (chartCache.timestamps.length > 1500) {
+                        chartCache.timestamps.shift();
+                        chartCache.series.forEach(s => s.data.shift());
+                    }
+
+                    socket.emit('SERVER SEND TREND LOAD CHART', chartCache);
+                } catch (error) {
+                    logger.error(error);
                 }
+            }, TIME);
 
-                const { startTime, endTime } = calculateTimeRange(timeRange);
-
-                const result = await trendService.getAggregatedLoadChartData({
-                    deviceIds,
-                    startTime,
-                    endTime,
-                })
-                socket.emit('SERVER SEND TREND LOAD CHART', result)
-            }, TIME)
         } catch (error) {
-            logger.error(error)
+            logger.error(error);
         }
-    })
+    });
 
     //Client sent data DEVICE
     socket.on('device:getStatus', async () => {
@@ -524,6 +543,12 @@ const connectSocket = (socket) => {
 
         clearInterval(analysisInterval[socket.id])
         delete analysisInterval[socket.id]
+
+        clearInterval(trendInterval[socket.id])
+        delete trendInterval[socket.id]
+
+        clearInterval(trendLoadInterval[socket.id])
+        delete trendLoadInterval[socket.id]
     })
 }
 module.exports = connectSocket

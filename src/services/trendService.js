@@ -21,9 +21,9 @@ function resolveBucketByDuration(startTs, endTs) {
     } else if (hours <= 1.5) {
         return { bucket: '1m', bucketMs: 60 * 1000 }   
     } else if (hours <= 8) {
-        return { bucket: '5m', bucketMs: 5 * 60 * 1000 } 
+        return { bucket: '15m', bucketMs: 15 * 60 * 1000 } 
     } else {
-        return { bucket: '20m', bucketMs: 20 * 60 * 1000 } 
+        return { bucket: '1H', bucketMs: 60 * 60 * 1000 } 
     }
 }
 function buildSeriesFromAggregates({ devices, rawItems, timestamps }) {
@@ -100,7 +100,7 @@ const trendService = {
         }
 
         const tagIdArray = foundTags.map((t) => t._id)
-
+        
         const pipeline = [
             {
                 $match: {
@@ -108,21 +108,37 @@ const trendService = {
                     date: { $gte: new Date(startOfDay), $lte: new Date(endOfDay) },
                 },
             },
-            { $unwind: '$values' },
+            // [TỐI ƯU 1]: Lọc bỏ các mốc thời gian thừa TRƯỚC KHI bung mảng
             {
-                $match: {
-                    'values.ts': { 
-                        $gte: startTs, 
-                        $lte: endTs 
+                $addFields: {
+                    values: {
+                        $filter: {
+                            input: '$values',
+                            as: 'v',
+                            cond: {
+                                $and: [
+                                    { $gte: ['$$v.ts', startTs] },
+                                    { $lte: ['$$v.ts', endTs] }
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            { $unwind: '$values' },
+            // [TỐI ƯU 2]: Lọc lấy đúng tag 'load' TRƯỚC KHI bung mảng con
+            {
+                $addFields: {
+                    'values.value': {
+                        $filter: {
+                            input: '$values.value',
+                            as: 'inner',
+                            cond: { $in: ['$$inner.tagId', tagIdArray] }
+                        }
                     }
                 }
             },
             { $unwind: '$values.value' },
-            {
-                $match: {
-                    'values.value.tagId': { $in: tagIdArray },
-                },
-            },
             {
                 $project: {
                     deviceId: '$deviceId',
