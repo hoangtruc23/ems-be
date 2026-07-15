@@ -108,7 +108,6 @@ const trendService = {
                     date: { $gte: new Date(startOfDay), $lte: new Date(endOfDay) },
                 },
             },
-            // [TỐI ƯU 1]: Lọc bỏ các mốc thời gian thừa TRƯỚC KHI bung mảng
             {
                 $addFields: {
                     values: {
@@ -126,7 +125,6 @@ const trendService = {
                 }
             },
             { $unwind: '$values' },
-            // [TỐI ƯU 2]: Lọc lấy đúng tag 'load' TRƯỚC KHI bung mảng con
             {
                 $addFields: {
                     'values.value': {
