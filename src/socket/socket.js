@@ -14,6 +14,7 @@ const {
     tagGenset,
     trendSummary,
 } = require('../utils/constant/tagDashboard')
+const { powerQuality } = require('../utils/constant/tagRealtime')
 const ControlHelper = require('../utils/control/controlHelper')
 
 const deviceHandler = new DeviceHandler()
@@ -37,6 +38,7 @@ const connectSocket = (socket) => {
     let overviewInterval = {}
     let trendInterval = {}
     let trendLoadInterval = {}
+    let trendPowerQualityInterval = {}
     let pcsAlarmInterval_2 = {}
     let pcsBatteryGroup = {}
     let controlModeInterval = {}
@@ -238,7 +240,7 @@ const connectSocket = (socket) => {
 
                     filteredTags.forEach((tag) => {
                         const lowerName = tag.name.toLowerCase();
-                        const value = tagValues[tag._id?.toString()] ?? tagValues[tag.name] ?? null;
+                        const value = tagValues[tag.name] ?? null;
 
                         if (value === undefined || value === null) return;
 
@@ -356,6 +358,103 @@ const connectSocket = (socket) => {
             logger.error(error);
         }
     });
+
+    socket.on('CLIENT GET POWER QUALITY INFO', async(data) => {
+        try {
+            const { deviceIds = [] } = data || {};
+            if (trendPowerQualityInterval[socket.id]){
+                clearInterval(trendPowerQualityInterval[socket.id]);
+            }
+
+            const tags = powerQuality;
+            const regexPattern = new RegExp(tags.join('|'), 'i');
+            let tagnames = await TagnameModel.find({
+                name: { $regex: regexPattern },
+            })
+            .select({
+                name: 1,
+                symbol: 1,
+                unit: 1,
+                deviceId: 1,
+            })
+            .lean()
+
+            const filteredTags = tagnames.filter(tag => deviceIds.includes(tag.deviceId?.toString()));
+            
+            trendPowerQualityInterval[socket.id] = setInterval(async () => {
+                try {
+
+                    if (deviceIds.length === 0) {
+                        socket.emit('SERVER SEND POWER QUALITY VALUE', {
+                            powerFactor: null,
+                            voltageTHD: null,
+                            currentTHD: null,
+                            phaseImbalance: null
+                        });
+                        return;
+                    }
+
+                    const tagValues = deviceHandler.datas;
+
+                    if (filteredTags.length === 0) {
+                        socket.emit('SERVER SEND POWER QUALITY VALUE', {
+                            powerFactor: null,
+                            voltageTHD: null,
+                            currentTHD: null,
+                            phaseImbalance: null
+                        });
+                        return;
+                    }
+
+                    let totalPF = 0;
+                    let totalVoltageTHD = 0;
+                    let totalCurrentTHD = 0;
+                    let totalPhaseImbalance = 0;
+
+                    let countPF = 0;
+                    let countVoltageTHD = 0;
+                    let countCurrentTHD = 0;
+                    let countPhaseImbalance = 0;
+
+                    filteredTags.forEach((tag) => {
+                        const lowerName = tag.name.toLowerCase();
+                        const value = tagValues[tag.name] ?? null;
+
+                        if (value === undefined || value === null) return
+                        
+                        if (lowerName.includes('cos') || lowerName.includes('factor')) {
+                            totalPF += value;
+                            countPF++;
+                        }
+                        else if (lowerName.includes('voltage') && lowerName.includes('thd')){
+                            totalVoltageTHD += value;
+                            countVoltageTHD++;
+                        }
+                        else if (lowerName.includes('current') && lowerName.includes('thd')){
+                            totalCurrentTHD += value;
+                            countCurrentTHD++;
+                        } 
+                        else if (lowerName.includes('phase') && lowerName.includes('imbalance')) {
+                            totalPhaseImbalance += value;
+                            countPhaseImbalance++;
+                        }
+                    });
+                    const result = {
+                        powerFactor: totalPF > 0 ? (totalPF / countPF) : null,
+                        voltageTHD: totalVoltageTHD > 0 ? (totalVoltageTHD / countVoltageTHD) : null,
+                        currentTHD: totalCurrentTHD > 0 ? (totalCurrentTHD / countCurrentTHD) : null,
+                        phaseImbalance: totalPhaseImbalance > 0 ? (totalPhaseImbalance / countPhaseImbalance) : null
+                    };
+
+                    socket.emit('SERVER SEND POWER QUALITY VALUE', result);
+                } catch (error) {
+                    logger.error(error);
+                }
+            }, TIME);
+        } catch (error) {
+            logger.error(error);
+        }
+    })
 
     //Client sent data DEVICE
     socket.on('device:getStatus', async () => {
@@ -549,6 +648,9 @@ const connectSocket = (socket) => {
 
         clearInterval(trendLoadInterval[socket.id])
         delete trendLoadInterval[socket.id]
+
+        clearInterval(trendPowerQualityInterval[socket.id])
+        delete trendPowerQualityInterval[socket.id]
     })
 }
 module.exports = connectSocket
