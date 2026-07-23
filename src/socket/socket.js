@@ -1,6 +1,7 @@
 const { logger } = require('../config/loggerConfig')
 const DeviceHandler = require('../device/deviceHandler')
 const TagnameModel = require('../models/tagname')
+const DeviceModel = require('../models/device')
 const trendService = require('../services/trendService')
 const {
     tagDashboard,
@@ -13,9 +14,12 @@ const {
     tagGrid,
     tagGenset,
     trendSummary,
+    tagDashboardSummary,
+    tagDashboardRealtimeDataMonitoring,
 } = require('../utils/constant/tagDashboard')
 const { powerQuality } = require('../utils/constant/tagRealtime')
 const ControlHelper = require('../utils/control/controlHelper')
+const dashboardService = require('../services/dashboardService')
 
 const deviceHandler = new DeviceHandler()
     ; (async () => {
@@ -39,6 +43,10 @@ const connectSocket = (socket) => {
     let trendInterval = {}
     let trendLoadInterval = {}
     let trendPowerQualityInterval = {}
+    let dashboardSummaryInterval = {}
+    let dashboardLoadDistributionInterval = {}
+    let dashboardConsumptionShareInterval = {}
+    let dashboardRealtimeDataMonitoringInterval = {}
     let pcsAlarmInterval_2 = {}
     let pcsBatteryGroup = {}
     let controlModeInterval = {}
@@ -291,6 +299,11 @@ const connectSocket = (socket) => {
                 clearInterval(trendLoadInterval[socket.id]);
             }
 
+            if (!Array.isArray(deviceIds) || deviceIds.length === 0) {
+                socket.emit('SERVER SEND TREND LOAD CHART', { timestamps: [], series: [] });
+                return;
+            }
+
 
             const calculateTimeRange = (range) => {
                 const endTime = new Date();
@@ -313,19 +326,15 @@ const connectSocket = (socket) => {
                 endTime,
             });
 
-            socket.emit('SERVER SEND TREND LOAD CHART', chartCache);
-
             const loadTags = await TagnameModel.find({
                 deviceId: { $in: deviceIds },
                 name: { $regex: /load/i }
             }).select('_id name deviceId').lean();
 
+            socket.emit('SERVER SEND TREND LOAD CHART', chartCache);
+
             trendLoadInterval[socket.id] = setInterval(() => {
                 try {
-                    if (deviceIds.length === 0) {
-                        socket.emit('SERVER SEND TREND LOAD CHART', { timestamps: [], series: [] });
-                        return;
-                    }
 
                     const tagValues = deviceHandler.datas;
                     const now = Date.now(); 
@@ -453,6 +462,383 @@ const connectSocket = (socket) => {
             }, TIME);
         } catch (error) {
             logger.error(error);
+        }
+    })
+
+    socket.on('CLIENT GET DASHBOARD SUMMARY INFO', async() => {
+        try {
+            if (dashboardSummaryInterval[socket.id]){
+                clearInterval(dashboardSummaryInterval[socket.id]);
+            }
+
+            const tags = tagDashboardSummary;
+            const regexPattern = new RegExp(tags.join('|'), 'i');
+            let tagnames = await TagnameModel.find({
+                name: { $regex: regexPattern },
+            })
+            .select({
+                name: 1,
+                symbol: 1,
+                unit: 1,
+                deviceId: 1,
+            })
+            .populate({
+                path: 'deviceId',
+                select: 'deviceName'
+            })
+            .lean()
+
+            let totalDevicesCount = await DeviceModel.countDocuments();
+
+            dashboardSummaryInterval[socket.id] = setInterval(async () => {
+                try {
+                    const tagValues = deviceHandler.datas;
+
+                    let totalConsumption = 0;
+                    let totalDemand = 0;
+                    let peakLoad = 0;
+                    let totalPF = 0;
+
+                    let peakLoadDeviceId = null;
+                    let peakLoadDeviceName = null;
+                    let countDemand = 0;
+                    let countPF = 0;
+
+                    tagnames.forEach((tag) => {
+                        const lowerName = tag.name.toLowerCase();
+                        const value = tagValues[tag.name] ?? null;
+
+                        if (value === undefined || value === null) return
+                        
+                        if (lowerName.includes('consumption')) {
+                            totalConsumption += value;
+                        }
+                        else if (lowerName.includes('demand')){
+                            totalDemand += value;
+                            countDemand++;
+                        }
+                        else if (lowerName.includes('load') && value > peakLoad){
+                            peakLoad = value;
+                            peakLoadDeviceId = tag.deviceId;
+                            peakLoadDeviceName = tag.deviceId?.deviceName;
+                        } 
+                        else if (lowerName.includes('powerfactor')) {
+                            totalPF += value;
+                            countPF++;
+                        }
+                    });
+
+                    
+                    const onlineDevicesCount = deviceHandler.connectionDevice?.filter(d => d.connected).length || 0;
+
+                    const result = {
+                        totalConsumption: totalConsumption > 0 ? totalConsumption : null,
+                        currentDemand: totalDemand > 0 ? (totalDemand / countDemand) : null,
+                        peakLoad: peakLoad > 0 ? {peakLoad, peakLoadDeviceName} : null,
+                        powerFactor: totalPF > 0 ? (totalPF / countPF) : null,
+                        activeMeters: {onlineDevicesCount, totalDevicesCount}
+                    };
+
+                    socket.emit('SERVER SEND DASHBOARD SUMMARY VALUE', result);
+                } catch (error) {
+                    logger.error(error)
+                }
+            }, TIME)
+            
+        } catch (error) {
+            logger.error(error)
+        }
+    })
+
+    socket.on('CLIENT GET DASHBOARD LOAD DISTRIBUTION INFO', async (timeRange = '1H') => {
+        try {
+            if (typeof timeRange !== 'string') {
+                timeRange = '1H';
+            }
+
+            if (dashboardLoadDistributionInterval[socket.id]) {
+                clearInterval(dashboardLoadDistributionInterval[socket.id]);
+            }
+
+            const calculateTimeRange = (range) => {
+                const endTime = new Date();
+                const endTs = endTime.getTime();
+                let startTs = endTs;
+                switch (range) {
+                    case '1H': startTs = endTs - (1 * 60 * 60 * 1000); break;
+                    case '6H': startTs = endTs - (6 * 60 * 60 * 1000); break;
+                    case '24H': default: startTs = endTs - (24 * 60 * 60 * 1000); break;
+                }
+                return { startTime: new Date(startTs).toISOString(), endTime: endTime.toISOString() };
+            };
+
+            const { startTime, endTime } = calculateTimeRange(timeRange);
+            const device = await DeviceModel.distinct('_id', {isEnable : true});
+            const deviceIds = device.map(id => id.toString());
+
+            if (deviceIds.length === 0) {
+                socket.emit('SERVER SEND DASHBOARD LOAD DISTRIBUTION VALUE', { timestamps: [], series: [] });
+                return;
+            }
+
+            let chartCache = await dashboardService.getAggregatedLoadChartData({
+                deviceIds,
+                startTime,
+                endTime,
+            });
+
+            const startTs = new Date(startTime).getTime();
+            const endTs = new Date(endTime).getTime();
+            const bucketMs = (endTs - startTs) / 4;
+
+            // Fallback
+            if (!chartCache.timestamps || chartCache.timestamps.length === 0) {
+                chartCache.timestamps = [0, 1, 2, 3].map(i => Math.round(startTs + i * bucketMs));
+                chartCache.series = deviceIds.map(id => ({ deviceId: id, name: id, data: [null, null, null, null] }));
+            }
+
+            chartCache.series.forEach(s => {
+                s.type = 'column'; 
+            });
+
+            const avgData = chartCache.timestamps.map((ts, index) => {
+                let sum = 0;
+                let count = 0;
+
+                chartCache.series.forEach(s => {
+                    const val = s.data[index];
+                    if (val !== null && val !== undefined && !isNaN(val)) {
+                        sum += Number(val);
+                        count++;
+                    }
+                });
+            
+                return count > 0 ? parseFloat((sum / count).toFixed(2)) : null;
+            });
+
+            chartCache.series.push({
+                deviceId: 'AVG_LOAD',
+                name: 'AVG Load',
+                type: 'line',
+                data: avgData
+            });
+
+            socket.emit('SERVER SEND DASHBOARD LOAD DISTRIBUTION VALUE', chartCache);
+
+            const loadTags = await TagnameModel.find({
+                deviceId: { $in: deviceIds },
+                name: { $regex: /load/i }
+            }).select('_id name deviceId').lean();
+
+            const loadTagByDevice = new Map(
+                loadTags.map(t => [t.deviceId.toString(), t])
+            );
+
+            dashboardLoadDistributionInterval[socket.id] = setInterval(() => {
+                try {
+
+                    const tagValues = deviceHandler.datas;
+
+                    let sumLive = 0;
+                    let countLive = 0;
+
+                    chartCache.series.forEach(serie => {
+                        if (serie.deviceId === 'AVG_LOAD') return 
+                        const tag = loadTagByDevice.get(serie.deviceId);
+
+                        let liveVal = null;
+                        if (tag) {
+                            liveVal = tagValues[tag._id.toString()] ?? tagValues[tag.name] ?? null;
+                        }
+
+                        if (liveVal !== null && liveVal !== undefined && !isNaN(liveVal)) {
+                            sumLive += Number(liveVal);
+                            countLive++;
+                        }
+
+                        serie.data[3] = liveVal;
+                    });
+
+                    const avgSerie = chartCache.series.find(s => s.deviceId === 'AVG_LOAD');
+                    if (avgSerie) {
+                        const realtimeAvg = countLive > 0 ? parseFloat((sumLive / countLive).toFixed(2)) : null;
+                        avgSerie.data[3] = realtimeAvg;
+                    }
+
+                    socket.emit('SERVER SEND DASHBOARD LOAD DISTRIBUTION VALUE', chartCache);
+                } catch (error) {
+                    logger.error(error);
+                }
+            }, TIME);
+
+        } catch (error) {
+            logger.error(error);
+        }
+    });
+
+    socket.on('CLIENT GET DASHBOARD CONSUMPTION SHARE INFO', async () => {
+        try {
+            if (dashboardConsumptionShareInterval[socket.id]) {
+                clearInterval(dashboardConsumptionShareInterval[socket.id]);
+            }
+
+            const enabledDevices = await DeviceModel.find({ isEnable: true }).select('_id deviceName').lean();
+            const enabledDeviceIds = enabledDevices.map(d => d._id);
+
+            if (enabledDeviceIds.length === 0) {
+                socket.emit('SERVER SEND DASHBOARD CONSUMPTION SHARE VALUE', { labels: [], series: [], percentages: [], totalConsumption: null });
+                return;
+            }
+
+            let tagnames = await TagnameModel.find({
+                deviceId: { $in: enabledDeviceIds},
+                name: { $regex: /consumption/i },
+            })
+            .select('_id name deviceId')
+            .populate({
+                path: 'deviceId',
+                select: 'deviceName',
+            })
+            .lean();
+
+            dashboardConsumptionShareInterval[socket.id] = setInterval(async () => {
+                try {
+                    const tagValues = deviceHandler.datas || {};
+
+                    let totalConsumption = 0;
+                    const deviceDataList = [];
+
+                    tagnames.forEach((tag) => {
+                        const rawVal = tagValues[tag._id?.toString()] ?? tagValues[tag.name] ?? 0;
+                        const val = Number(rawVal) > 0 ? Number(rawVal) : 0;
+
+                        const labelName = tag.deviceId?.deviceName || tag.name;
+
+                        totalConsumption += val;
+                        deviceDataList.push({
+                            label: labelName,
+                            value: val,
+                        });
+                    });
+
+                    const series = [];
+                    const labels = [];
+                    const percentages = [];
+
+                    deviceDataList.forEach((item) => {
+                        const percent = totalConsumption > 0 
+                            ? parseFloat(((item.value / totalConsumption) * 100).toFixed(2)) 
+                            : 0;
+
+                        labels.push(item.label);
+                        series.push(item.value);
+                        percentages.push(percent);
+                    });
+
+                    const result = {
+                        labels,        
+                        series,     
+                        percentages,
+                        totalConsumption: parseFloat(totalConsumption.toFixed(2))
+                    };
+
+                    socket.emit('SERVER SEND DASHBOARD CONSUMPTION SHARE VALUE', result);
+
+                } catch (error) {
+                    logger.error(error)
+                }
+            }, TIME)
+        } catch (error) {
+            logger.error(error)
+        }
+    })
+
+    socket.on('CLIENT GET REALTIME MONITORING INFO', async () => {
+        try {
+            if (dashboardRealtimeDataMonitoringInterval[socket.id]) {
+                clearInterval(dashboardRealtimeDataMonitoringInterval[socket.id]);
+            }
+
+            const devices = await DeviceModel.find()
+                    .select('_id deviceName deviceCode')
+                    .lean();
+
+            if (!devices.length) {
+                socket.emit('SERVER SEND REALTIME MONITORING VALUE', []);
+                return;
+            }
+
+            const deviceIds = devices.map(d => d._id);
+
+            const tags = tagDashboardRealtimeDataMonitoring;
+            const regexPattern = new RegExp(tags.join('|'), 'i');
+
+            const tagnames = await TagnameModel.find({
+                    deviceId: { $in: deviceIds },
+                    name: { $regex: regexPattern }
+            })
+            .select('_id name deviceId')
+            .lean();
+
+            const tagsByDevice = new Map();
+            tagnames.forEach(t => {
+                const id = t.deviceId?.toString();
+                if (!id) return;
+                if (!tagsByDevice.has(id)) tagsByDevice.set(id, []);
+                tagsByDevice.get(id).push(t);
+            });
+
+            dashboardRealtimeDataMonitoringInterval[socket.id] = setInterval(async () => {
+                try {
+                    const tagValues = deviceHandler.datas || {};
+                    const connectionDevices = deviceHandler.connectionDevice || [];
+
+                    const connMap = new Map(connectionDevices.map(c => [c.deviceId, c]));
+
+                    const result = devices.map((device) => {
+                        const deviceId = device._id.toString();
+
+                        const conn = connMap.get(deviceId);  
+                        const status = (conn && conn.connected) ? 'Active' : 'Inactive';
+                        const deviceTag =  tagsByDevice.get(deviceId) || [];
+
+                        let voltageVal = null;
+                        let currentVal = null;
+                        let loadVal = null;
+
+                        deviceTag.forEach((tag) => {
+                            const lowerName = tag.name.toLowerCase();
+
+                            const value = tagValues[tag.name] ?? null;
+
+                            if (value === undefined || value === null) return
+
+                            if(lowerName.includes('voltage')) {
+                                voltageVal = value;
+                            } else if (lowerName.includes('current')) {
+                                currentVal = value;
+                            } else if (lowerName.includes('load')) {
+                                loadVal = value;
+                            }
+                        });
+
+                        return {
+                            deviceId: deviceId,
+                            code: device.deviceCode || null,
+                            status: status,
+                            voltage: voltageVal !== null ? parseFloat(voltageVal.toFixed(2)) : null,
+                            current: currentVal !== null ? parseFloat(currentVal.toFixed(2)) : null,
+                            load: loadVal !== null ? parseFloat(loadVal.toFixed(2)) : null,
+                        };
+                    })
+                    socket.emit('SERVER SEND REALTIME MONITORING VALUE', result);
+                } catch (error) {
+                    logger.error(error)
+                }
+            }, TIME)
+
+        } catch (error) {
+            logger.error(error)
         }
     })
 
@@ -651,6 +1037,18 @@ const connectSocket = (socket) => {
 
         clearInterval(trendPowerQualityInterval[socket.id])
         delete trendPowerQualityInterval[socket.id]
+
+        clearInterval(dashboardSummaryInterval[socket.id])
+        delete dashboardSummaryInterval[socket.id]
+
+        clearInterval(dashboardLoadDistributionInterval[socket.id])
+        delete dashboardLoadDistributionInterval[socket.id]
+
+        clearInterval(dashboardConsumptionShareInterval[socket.id])
+        delete dashboardConsumptionShareInterval[socket.id]
+
+        clearInterval(dashboardRealtimeDataMonitoringInterval[socket.id])
+        delete dashboardRealtimeDataMonitoringInterval[socket.id]
     })
 }
 module.exports = connectSocket
