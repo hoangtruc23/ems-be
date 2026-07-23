@@ -9,6 +9,14 @@ const alarmController = {
             next(error)
         }
     },
+    summary: async (req, res, next) => {
+        try {
+            const result = await alarmService.summary();
+            return res.status(200).json(response.success(result))
+        } catch (error) {
+            next(error)
+        }
+    },
     create: async (req, res, next) => {
         try {
             const newAlarm = req.body;
