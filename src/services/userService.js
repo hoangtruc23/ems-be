@@ -101,7 +101,7 @@ const userService = {
     },
     update: async (userId, user) => {
         try {
-            const { fullname, username, role } = user
+            const { fullname, username, isLock, role } = user
 
             if (username) {
                 const checkUsername = await UserModel.findOne({ username, _id: { $ne: userId } })
@@ -116,6 +116,7 @@ const userService = {
                     fullname,
                     username,
                     role,
+                    isLock
                 },
                 {
                     new: true,

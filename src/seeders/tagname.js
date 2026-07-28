@@ -32,6 +32,19 @@ async function tagnameSeeder() {
             note: '',
         },
         {
+            name: 'currentTHD',
+            symbol: 'Current THD',
+            functionCode: 4,
+            address: 2,
+            dataType: 3,
+            unit: '%',
+            offset: 0,
+            gain: 1,
+            deviceId: '684bcaeb7cac1b319680bf0a',
+            isSaveDb: false,
+            note: '',
+        },
+        {
             name: 'voltage',
             symbol: 'Voltage',
             functionCode: 4,
@@ -138,6 +151,19 @@ async function tagnameSeeder() {
         {
             name: 'voltageImbalance', // Cho biết điện áp giữa các pha
             symbol: 'Voltage Imbalance', //(càng nhỏ càng tốt, dưới 1% là rất cân bằng)
+            functionCode: 4,
+            address: 9,
+            dataType: 3,
+            unit: 'ton',
+            offset: 0,
+            gain: 1,
+            deviceId: '684bcaeb7cac1b319680bf0a',
+            isSaveDb: false,
+            note: '',
+        },
+        {
+            name: 'phaseImbalance',
+            symbol: 'Phase Imbalance',
             functionCode: 4,
             address: 9,
             dataType: 3,
