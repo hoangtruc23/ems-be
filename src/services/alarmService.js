@@ -35,7 +35,7 @@ const alarmService = {
         }
     },
     create: async (alarm) => {
-        const defaultTime = moment().tz('Asia/Ho_Chi_Minh').format('DD-MM-YY HH:mm:ss');
+        const defaultTime = moment().tz('Asia/Ho_Chi_Minh').toDate();
 
         const newAlarm = new AlarmModel({
             name: alarm.name,
@@ -45,7 +45,8 @@ const alarmService = {
             value: alarm.value,
             deviceName: alarm.deviceName,
             time: alarm.time || defaultTime,
-            status: 'unResolved'  
+            status: 'unResolved',
+            resolvedAt: null,
         })
 
         const savedAlarm = await newAlarm.save();
@@ -58,11 +59,13 @@ const alarmService = {
                 {},
                 {
                     status: newStatus,
+                    resolvedAt: newStatus === 'resolved' ? new Date() : null,
                 },
             )
         } else {
             await AlarmModel.findByIdAndUpdate(alarmId, {
                 status: newStatus,
+                resolvedAt: newStatus === 'resolved' ? new Date() : null,
             })
         }
         return null
@@ -73,11 +76,13 @@ const alarmService = {
                 {},
                 {
                     status: "resolved",
+                    resolvedAt: new Date(),
                 },
             )
         } else {
             await AlarmModel.findByIdAndUpdate(alarmId, {
                 status: "resolved",
+                resolvedAt: new Date(),
             })
         }
         return null

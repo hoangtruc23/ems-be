@@ -18,11 +18,11 @@ const alarmSchema = new Schema({
         type: String,
     },
     severity: {
-        type: String,
-        enum: [0, 1, 2],
-        default: 0,
-        required: true,
-    },
+    type: String,
+    enum: ['0', '1', '2'],   // hoặc đổi hẳn sang String có ý nghĩa: 'low','medium','high'
+    default: '0',
+    required: true,
+},
     note: {
         type: String,
         required: true,
@@ -35,6 +35,10 @@ const alarmSchema = new Schema({
     },
     value: {
         type: String,
+    },
+    resolvedAt: {
+        type: Date,
+        default: null,
     },
 })
 

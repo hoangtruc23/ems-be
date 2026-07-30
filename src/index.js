@@ -26,6 +26,38 @@ const io = require('socket.io')(server, {
     },
 })
 
+app.use((req, res, next) => {
+    const startedAt = Date.now()
+    const requestId = `${startedAt}-${Math.random().toString(36).slice(2, 8)}`
+    req.requestId = requestId
+
+    logger.info(
+        `[REQ ${requestId}] ${req.method} ${req.originalUrl} from ${req.ip}`,
+    )
+
+    const timer = setTimeout(() => {
+        logger.warn(
+            `[SLOW ${requestId}] ${req.method} ${req.originalUrl} still running after 10000ms`,
+        )
+    }, 10000)
+
+    res.on('finish', () => {
+        clearTimeout(timer)
+        logger.info(
+            `[RES ${requestId}] ${req.method} ${req.originalUrl} -> ${res.statusCode} in ${Date.now() - startedAt}ms`,
+        )
+    })
+
+    res.on('close', () => {
+        clearTimeout(timer)
+        logger.warn(
+            `[CLOSE ${requestId}] ${req.method} ${req.originalUrl} closed after ${Date.now() - startedAt}ms`,
+        )
+    })
+
+    next()
+})
+
 app.use(limiter)
 app.use(helmet())
 app.use(corsMiddleware)

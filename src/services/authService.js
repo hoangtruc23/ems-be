@@ -10,14 +10,18 @@ const errorCode = require('../utils/response/errorCode')
 const authService = {
     login: async (username, password) => {
         try {
+            console.log('[AUTH SERVICE] step 1 find user')
             const user = await UserModel.findOne({ username }).lean()
+            console.log('[AUTH SERVICE] step 1 done', !!user)
             if (!user) {
                 throw new BadReq(errorCode.INCORRECT_USERNAME)
             }
+            console.log('[AUTH SERVICE] step 2 compare password')
             const comparePassword = await bcrypt.compare(
                 password,
                 user.password,
             )
+            console.log('[AUTH SERVICE] step 2 done', comparePassword)
 
             if (!comparePassword) {
                 throw new BadReq(errorCode.INCORRECT_PASSWORD)
@@ -31,6 +35,7 @@ const authService = {
             )
 
             // set redis
+            console.log('[AUTH SERVICE] step 3 set redis')
             await clientRedis.set(
                 `${constant.REDIS_PREFIX_ACCESS_TOKEN}_${user._id}_${ts}`,
                 accessToken,
@@ -38,6 +43,7 @@ const authService = {
                     EX: envConfig.JWT_ACCESS_TOKEN_EXPIRES,
                 },
             )
+            console.log('[AUTH SERVICE] step 3 done')
 
             return accessToken
         } catch (error) {

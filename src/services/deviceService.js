@@ -1,7 +1,65 @@
 const DeviceHandler = require('../device/deviceHandler')
 const DeviceModel = require('../models/device')
 const deviceHandler = new DeviceHandler()
+
+const normalizeDeviceUpdatePayload = async (deviceId, devicePayload) => {
+    const currentDevice = await DeviceModel.findById(deviceId).lean()
+    const existingConfig =
+        currentDevice?.config && typeof currentDevice.config === 'object'
+            ? currentDevice.config
+            : {}
+
+    const normalizedConfig = { ...existingConfig }
+    const payload = { ...devicePayload }
+
+    if (payload.config && typeof payload.config === 'object') {
+        Object.assign(normalizedConfig, payload.config)
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, 'host')) {
+        normalizedConfig.host = payload.host
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, 'ip')) {
+        normalizedConfig.host = payload.ip
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, 'port')) {
+        normalizedConfig.port = payload.port
+    }
+
+    if (Object.prototype.hasOwnProperty.call(payload, 'slaveId')) {
+        normalizedConfig.slaveId = payload.slaveId
+    }
+
+    const { config, host, ip, port, slaveId, ...restPayload } = payload
+    const normalizedPayload = { ...restPayload }
+
+    if (payload.config !== undefined || Object.keys(normalizedConfig).length > 0) {
+        normalizedPayload.config = normalizedConfig
+    }
+
+    return normalizedPayload
+}
+
 const deviceService = {
+    getList: async () => {
+        try {
+            const data = await DeviceModel.find(
+                {},
+                { _id: 1, deviceName: 1 },
+            )
+                .sort({ deviceName: 1 })
+                .lean()
+
+            return [
+                { _id: 'all', deviceName: 'All' },
+                ...data,
+            ]
+        } catch (error) {
+            throw error
+        }
+    },
     getAll: async (query) => {
         try {
             let { page, limit, search, location } = query
@@ -89,11 +147,17 @@ const deviceService = {
     update: async (param, device) => {
         try {
             const { deviceId } = param
-            const data = await DeviceModel.findByIdAndUpdate(deviceId, device, {
+            const normalizedPayload = await normalizeDeviceUpdatePayload(
+                deviceId,
+                device,
+            )
+
+            const data = await DeviceModel.findByIdAndUpdate(deviceId, normalizedPayload, {
                 new: true,
             })
 
-            deviceHandler.connect(deviceId)
+            await deviceHandler.disconnect(deviceId)
+            await deviceHandler.connect(data)
 
             return data
         } catch (error) {

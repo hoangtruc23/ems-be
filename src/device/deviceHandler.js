@@ -28,9 +28,9 @@ function DeviceHandler() {
 
     this.connectAll = async () => {
         try {
-            const devices = await DeviceModel.find().select('_id')
+            const devices = await DeviceModel.find().lean()
             await Promise.all(
-                devices.map((device) => this.connect(device._id.toString())),
+                devices.map((device) => this.connect(device)),
             )
             this.readData()
         } catch (error) {
@@ -39,13 +39,29 @@ function DeviceHandler() {
         }
     }
 
-    this.connect = async (deviceId) => {
+    this.connect = async (deviceOrId) => {
+        const deviceId = typeof deviceOrId === 'object'
+            ? deviceOrId?._id?.toString()
+            : deviceOrId?.toString()
+
+        if (!deviceId) {
+            throw new Error('Device ID is required to connect')
+        }
+
         if (this.reconnectDevice[deviceId]) {
             clearTimeout(this.reconnectDevice[deviceId])
             this.reconnectDevice[deviceId] = null
         }
 
-        const device = await DeviceModel.findById(deviceId)
+        const device =
+            typeof deviceOrId === 'object' && deviceOrId?._id
+                ? deviceOrId
+                : await DeviceModel.findById(deviceId).lean()
+
+        if (!device) {
+            throw new Error(`Device ${deviceId} not found`)
+        }
+
         const did = device._id.toString()
         let deviceStatus = this.connectionDevice.find(c => c.deviceId === did)
         if (!deviceStatus) {
@@ -108,7 +124,7 @@ function DeviceHandler() {
     }
 
     this.disconnect = async (deviceId) => {
-        const device = await DeviceModel.findById(deviceId)
+        const device = await DeviceModel.findById(deviceId).lean()
         try {
             logger.warn(`Thiết bị ${device.deviceName} tắt kết nối!`)
             switch (device.protocol) {
@@ -117,11 +133,11 @@ function DeviceHandler() {
                         await this.devices[deviceId].close() // Disconnect IP
                         delete this.devices[deviceId]
                     }
-                    logger.info(`Đã ngắt kết nối thiết bị ${device.deviceName}`)
                     if (this.reconnectDevice[deviceId]) {
                         clearTimeout(this.reconnectDevice[deviceId])
                         this.reconnectDevice[deviceId] = null
                     }
+                    logger.info(`Đã ngắt kết nối thiết bị ${device.deviceName}`)
                     break;
                 case "siemens_s7":
                     if (this.devices[deviceId]) {
@@ -198,9 +214,31 @@ function DeviceHandler() {
                                 const readLength = maxAddr - minAddr + 2;
 
                                 try {
+                                    const targetTag = chunk.find((t) => t.name === 'gridTotal');
+                                    if (targetTag) {
+                                        console.log('[DEBUG gridTotal BEFORE READ]', {
+                                            deviceId,
+                                            minAddr,
+                                            maxAddr,
+                                            readLength,
+                                            targetTag,
+                                        })
+                                    }
+
                                     let response = null;
                                     if (fc === 3) response = await client.readHoldingRegisters(minAddr, readLength);
                                     else if (fc === 4) response = await client.readInputRegisters(minAddr, readLength);
+
+                                    if (targetTag) {
+                                        console.log('[DEBUG gridTotal AFTER READ]', {
+                                            deviceId,
+                                            minAddr,
+                                            maxAddr,
+                                            response,
+                                            buffer: response?.buffer,
+                                            data: response?.data,
+                                        })
+                                    }
 
                                     if (response?.buffer) {
                                         const chunkAddresses = new Set(addresses);
@@ -221,8 +259,17 @@ function DeviceHandler() {
                                                     value = value * tag.gain + tag.offset;
                                                 }
                                             }
-                                            this.datas[tag.name] = value;
-                                            // this.datas[tag._id.toString()] = value;
+                                            if (tag.name === 'gridTotal') {
+                                                console.log('[DEBUG gridTotal PARSED]', {
+                                                    deviceId,
+                                                    tag: tag.name,
+                                                    address: tag.address,
+                                                    slice,
+                                                    parsedValue: value,
+                                                })
+                                            }
+                                            this.datas[tag._id.toString()] = value;
+                                            // Dùng tag._id vì getValueGroupDevice() và saveDb() đang đọc theo key này.
                                         });
                                     }
                                 } catch (err) {

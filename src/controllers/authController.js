@@ -9,8 +9,10 @@ const errorCode = require('../utils/response/errorCode')
 const authController = {
     login: async (req, res, next) => {
         try {
+            console.log('[AUTH LOGIN] hit', req.body)
             const { username, password } = req.body
             const accessToken = await authService.login(username, password)
+            console.log('[AUTH LOGIN] done')
             return res.status(200).json(response.success(accessToken))
         } catch (error) {
             next(error)

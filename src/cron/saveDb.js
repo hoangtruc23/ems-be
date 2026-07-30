@@ -7,8 +7,8 @@ const saveDb = new CronJob('*/5 * * * * *', async () => {
     try {
         // 1. Lấy dữ liệu từ hàm của bạn
         const valuesMap = await deviceHandler.getValueGroupDevice();
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
+        const snapshotTs = Date.now();
+        const snapshotDate = new Date(snapshotTs);
 
         // 2. Sử dụng Promise.all để lưu tất cả thiết bị đồng thời
         const updatePromises = Object.entries(valuesMap).map(async ([deviceId, tagList]) => {
@@ -19,23 +19,17 @@ const saveDb = new CronJob('*/5 * * * * *', async () => {
                 value: tag.values
             }));
 
-            // 3. Thực hiện lưu vào DB bằng $push
-            return await ValuesModel.findOneAndUpdate(
-                {
-                    deviceId: deviceId,
-                    date: { $gte: startOfDay }
-                },
-                {
-                    $push: {
-                        values: {
-                            ts: Date.now(),
-                            value: formattedTagValues // Mảng các tag đã được format
-                        }
+            // 3. Lưu mỗi lần quét thành 1 document riêng để không phình document vượt 16MB
+            return await ValuesModel.create({
+                deviceId: deviceId,
+                date: snapshotDate,
+                values: [
+                    {
+                        ts: snapshotTs,
+                        value: formattedTagValues,
                     },
-                    $setOnInsert: { date: new Date() } // Chỉ set date khi tạo mới
-                },
-                { upsert: true, new: true }
-            );
+                ],
+            });
         });
 
         // Đợi tất cả hoàn tất

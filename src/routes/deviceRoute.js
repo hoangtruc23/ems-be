@@ -2,6 +2,7 @@ const express = require('express')
 const deviceController = require('../controllers/deviceController')
 const router = express.Router()
 
+router.get('/list', deviceController.getList)
 router.get('/getAll', deviceController.getAll)
 router.get('/getAllLocation', deviceController.getAllLocation)
 router.post('/create', deviceController.create)

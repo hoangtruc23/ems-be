@@ -2,6 +2,14 @@ const deviceService = require('../services/deviceService')
 const response = require('../utils/response/response')
 
 const deviceController = {
+    getList: async (req, res, next) => {
+        try {
+            const result = await deviceService.getList()
+            return res.status(200).json(response.success(result))
+        } catch (error) {
+            next(error)
+        }
+    },
     getAll: async (req, res, next) => {
         try {
             const result = await deviceService.getAll(req.query)

@@ -7,8 +7,9 @@ const envConfig = {
     DB_HOST: process.env.DB_HOST || 'localhost',
     DB_PORT: process.env.DB_PORT || 27017,
     DB_NAME: process.env.DB_NAME || 'ems-db',
-    DB_USERNAME: process.env.DB_USERNAME || 'admin',
-    DB_PASSWORD: process.env.DB_PASSWORD || 'Admin123!@#',
+    DB_USERNAME: process.env.DB_USERNAME,
+    DB_PASSWORD: process.env.DB_PASSWORD,
+    MONGODB_URI: process.env.MONGODB_URI,
     JWT_ACCESS_TOKEN_PRIVATE_KEY:
         process.env.JWT_ACCESS_TOKEN_PRIVATE_KEY || 'ems-key',
     JWT_ACCESS_TOKEN_EXPIRES: process.env.JWT_ACCESS_TOKEN_EXPIRES || '36000',

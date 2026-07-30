@@ -13,10 +13,7 @@ const tagnameSchema = new Schema({
         type: Number,
         required: true,
     },
-    address: {
-        type: String,
-        required: true,
-    },
+    address: { type: Number, required: true },
     bit: {
         type: Number,
         default: null,

@@ -57,6 +57,8 @@ function ModbusHandler(device) {
     this.connectTCP = async () => {
         try {
             const { config } = this.device
+            console.log(`---> [DEBUG Modbus] Đang thử kết nối thiết bị: Host=${config.host}, Port=${config.port}, SlaveID=${config.slaveId}`);
+            
             const client = new ModbusSerial()
             await client.setTimeout(3000)
             await client.connectTCP(config.host, { port: Number(config.port) })
@@ -92,10 +94,20 @@ function ModbusHandler(device) {
     this.readHoldingRegisters = async (addr, len) => {
         try {
             if (this.client) {
+                console.log('[DEBUG modbusClient readHoldingRegisters]', { addr, len })
                 this.client.setTimeout(2000);
-                return await this.client.readHoldingRegisters(addr, len)
+                const response = await this.client.readHoldingRegisters(addr, len)
+                console.log('[DEBUG modbusClient readHoldingRegisters OK]', { addr, len, response })
+                return response
             }
+            console.warn('[DEBUG modbusClient readHoldingRegisters no client]', { addr, len })
         } catch (error) {
+            console.error('[DEBUG modbusClient readHoldingRegisters ERROR]', {
+                addr,
+                len,
+                message: error?.message,
+                stack: error?.stack,
+            })
             throw error
         }
     }
@@ -103,10 +115,20 @@ function ModbusHandler(device) {
     this.readInputRegisters = async (addr, len) => {
         try {
             if (this.client) {
+                console.log('[DEBUG modbusClient readInputRegisters]', { addr, len })
                 this.client.setTimeout(2000);
-                return await this.client.readInputRegisters(addr, len)
+                const response = await this.client.readInputRegisters(addr, len)
+                console.log('[DEBUG modbusClient readInputRegisters OK]', { addr, len, response })
+                return response
             }
+            console.warn('[DEBUG modbusClient readInputRegisters no client]', { addr, len })
         } catch (error) {
+            console.error('[DEBUG modbusClient readInputRegisters ERROR]', {
+                addr,
+                len,
+                message: error?.message,
+                stack: error?.stack,
+            })
             throw error
         }
     }

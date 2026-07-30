@@ -6,17 +6,19 @@ const DB_HOST = envConfig.DB_HOST,
     DB_PORT = envConfig.DB_PORT,
     DB_NAME = envConfig.DB_NAME,
     DB_USERNAME = envConfig.DB_USERNAME,
-    DB_PASSWORD = encodeURIComponent(envConfig.DB_PASSWORD),
-    LOGIN_DB =
-        DB_USERNAME && DB_PASSWORD ? `${DB_USERNAME}:${DB_PASSWORD}@` : '',
+    DB_PASSWORD = envConfig.DB_PASSWORD
+        ? encodeURIComponent(envConfig.DB_PASSWORD)
+        : '',
+    LOGIN_DB = DB_USERNAME && DB_PASSWORD ? `${DB_USERNAME}:${DB_PASSWORD}@` : '',
     ATLAS_DB = envConfig.DB_HOST?.indexOf('mongodb') > 0
 
 let isConnectedBefore = false
 let reconnectTimeout = null
 
-const mongoURI = `mongodb${ATLAS_DB ? '+srv' : ''}://${LOGIN_DB}${DB_HOST}${
+const builtMongoURI = `mongodb${ATLAS_DB ? '+srv' : ''}://${LOGIN_DB}${DB_HOST}${
     ATLAS_DB ? '' : `:${DB_PORT}`
 }/${DB_NAME}`
+const mongoURI = envConfig.MONGODB_URI || builtMongoURI
 
 const options = {
     autoIndex: false,
