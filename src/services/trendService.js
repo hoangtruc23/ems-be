@@ -12,20 +12,21 @@ function resolveBucketByDuration(startTs, endTs) {
     if (!startTs || !endTs || endTs <= startTs) {
         return { bucket: 'raw', bucketMs: null }
     }
-    
+
     const durationMs = endTs - startTs
     const hours = durationMs / (1000 * 60 * 60)
 
     if (hours <= 0.3) {
-        return { bucket: '15s', bucketMs: 15 }      
+        return { bucket: '15s', bucketMs: 15 * 1000 } 
     } else if (hours <= 1.5) {
-        return { bucket: '1m', bucketMs: 60 * 1000 }   
+        return { bucket: '1m', bucketMs: 60 * 1000 }
     } else if (hours <= 8) {
-        return { bucket: '15m', bucketMs: 15 * 60 * 1000 } 
+        return { bucket: '15m', bucketMs: 15 * 60 * 1000 }
     } else {
-        return { bucket: '1H', bucketMs: 60 * 60 * 1000 } 
+        return { bucket: '1H', bucketMs: 60 * 60 * 1000 }
     }
 }
+
 function buildSeriesFromAggregates({ devices, rawItems, timestamps }) {
     const dataMap = new Map()
     rawItems.forEach((item) => {
@@ -35,7 +36,7 @@ function buildSeriesFromAggregates({ devices, rawItems, timestamps }) {
 
     const series = devices.map((device) => {
         const devIdStr = device._id.toString()
-        
+
         const data = timestamps.map((ts) => {
             const key = `${devIdStr}_${ts}`
             return dataMap.has(key) ? dataMap.get(key) : null
@@ -48,10 +49,19 @@ function buildSeriesFromAggregates({ devices, rawItems, timestamps }) {
         }
     })
 
-    return {
-        timestamps,
-        series,
+    return { timestamps, series }
+}
+
+function generateContinuousTimestamps(startTs, endTs, bucketMs) {
+    if (!bucketMs) return []
+    const alignedStart = alignTimestamp(startTs, bucketMs)
+    const alignedEnd = alignTimestamp(endTs, bucketMs)
+    const timestamps = []
+
+    for (let ts = alignedStart; ts <= alignedEnd; ts += bucketMs) {
+        timestamps.push(ts)
     }
+    return timestamps
 }
 
 const trendService = {
@@ -72,10 +82,8 @@ const trendService = {
 
         const startTs = startTime ? new Date(startTime).getTime() : new Date().setHours(0, 0, 0, 0)
         const endTs = endTime ? new Date(endTime).getTime() : new Date().setHours(23, 59, 59, 999)
-        const startOfDay = new Date(startTs).setHours(0, 0, 0, 0)
-        const endOfDay = new Date(endTs).setHours(23, 59, 59, 999)
 
-        if (isNaN(startTs) || isNaN(endTs)) {
+        if (isNaN(startTs) || isNaN(endTs) || endTs <= startTs) {
             return { timestamps: [], series: [] }
         }
 
@@ -85,27 +93,27 @@ const trendService = {
             .select('_id deviceName')
             .lean()
 
-        if (!devices.length) {
-            return { timestamps: [], series: [] }
-        }
+        if (!devices.length) return { timestamps: [], series: [] }
 
         const foundTags = await TagnameModel.find({
             deviceId: { $in: objectIds },
             name: { $regex: /load/i },
-        })
-            .select('_id name deviceId')
-            .lean()
-        if (!foundTags.length) {
-            return { timestamps: [], series: [] }
-        }
+        }).select('_id deviceId').lean()
 
-        const tagIdArray = foundTags.map((t) => t._id)
-        
+        if (!foundTags.length) return { timestamps: [], series: [] }
+
+        const tagIdArray = foundTags.map((t) => new mongoose.Types.ObjectId(t._id))
+
+        const startDate = new Date(startTs)
+        startDate.setHours(0, 0, 0, 0)
+        const endDate = new Date(endTs)
+        endDate.setHours(23, 59, 59, 999)
+
         const pipeline = [
             {
                 $match: {
                     deviceId: { $in: objectIds },
-                    date: { $gte: new Date(startOfDay), $lte: new Date(endOfDay) },
+                    date: { $gte: startDate, $lte: endDate },
                 },
             },
             {
@@ -117,12 +125,12 @@ const trendService = {
                             cond: {
                                 $and: [
                                     { $gte: ['$$v.ts', startTs] },
-                                    { $lte: ['$$v.ts', endTs] }
-                                ]
-                            }
-                        }
-                    }
-                }
+                                    { $lte: ['$$v.ts', endTs] },
+                                ],
+                            },
+                        },
+                    },
+                },
             },
             { $unwind: '$values' },
             {
@@ -131,10 +139,10 @@ const trendService = {
                         $filter: {
                             input: '$values.value',
                             as: 'inner',
-                            cond: { $in: ['$$inner.tagId', tagIdArray] }
-                        }
-                    }
-                }
+                            cond: { $in: ['$$inner.tagId', tagIdArray] },
+                        },
+                    },
+                },
             },
             { $unwind: '$values.value' },
             {
@@ -157,9 +165,15 @@ const trendService = {
             value: item.value,
         }))
 
-        const timestampSet = new Set()
-        normalizedItems.forEach((item) => timestampSet.add(item.ts))
-        const timestamps = Array.from(timestampSet).sort((a, b) => a - b)
+        // Tạo mốc thời gian liên tục cho Chart UI
+        let timestamps = []
+        if (bucket !== 'raw' && bucketMs) {
+            timestamps = generateContinuousTimestamps(startTs, endTs, bucketMs)
+        } else {
+            const timestampSet = new Set()
+            normalizedItems.forEach((item) => timestampSet.add(item.ts))
+            timestamps = Array.from(timestampSet).sort((a, b) => a - b)
+        }
 
         if (bucket !== 'raw') {
             const bucketedMap = new Map()
@@ -177,11 +191,11 @@ const trendService = {
             })
 
             const aggregatedItems = Array.from(bucketedMap.values()).map((item) => {
-                const validVals = item.values.filter((v) => v !== null && v !== undefined)
+                const validVals = item.values.filter((v) => v !== null && v !== undefined && !isNaN(v))
                 let avgVal = null
 
                 if (validVals.length > 0) {
-                    const sum = validVals.reduce((acc, cur) => acc + Number(cur || 0), 0)
+                    const sum = validVals.reduce((acc, cur) => acc + Number(cur), 0)
                     avgVal = parseFloat((sum / validVals.length).toFixed(2))
                 }
 
