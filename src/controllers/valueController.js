@@ -42,6 +42,14 @@ const valueController = {
             next(error)
         }
     },
+    monthlyEnergyConsumption: async (req, res, next) => {
+        try {
+            const result = await valueService.monthlyEnergyConsumption()
+            return res.status(200).json(response.success(result))
+        } catch (error) {
+            logger.error(error)
+        }
+    }
 }
 
 module.exports = valueController

@@ -2,6 +2,7 @@ const { Types } = require('mongoose')
 const ValueModel = require('../models/value')
 const TagnameModel = require('../models/tagname')
 const constant = require('../utils/constant/constant')
+const { logger } = require('../config/loggerConfig')
 const BadReq = require('../utils/response/requestError')
 const errorCode = require('../utils/response/errorCode')
 const mongoose = require('mongoose');
@@ -524,6 +525,143 @@ const valueService = {
 
         } catch (error) {
             throw error;
+        }
+    },
+
+    //PAGE DASHBOARD
+    monthlyEnergyConsumption: async () => {
+        try {
+            const now = new Date();
+            const currentYearNum = now.getFullYear();
+            const prevYearNum = currentYearNum - 1;
+
+            const startTs = new Date(`${prevYearNum - 1}-12-01T00:00:00.000+07:00`);
+            const endTs = new Date(`${currentYearNum}-12-31T23:59:59.999+07:00`);
+
+            const emptySeries = {
+                series: [
+                    {
+                        name: 'Current year',
+                        data: Array(12).fill(0),
+                    },
+                    {
+                        name: 'Previous year',
+                        data: Array(12).fill(0),
+                    },
+                ]
+            };
+
+            const devices = await DeviceModel.distinct('_id');
+            if (devices.length === 0) return emptySeries;
+
+            const foundTags = await TagnameModel.find({
+                deviceId: { $in: devices },
+                name: { $regex: /consumption/i }
+            }).select('_id');
+
+            if (foundTags.length === 0) return { currentYear: Array(12).fill(null), previousYear: Array(12).fill(null) };
+            const tagIdArray = foundTags.map(t => t._id);
+
+            const pipeline = [
+                { $match: { date: { $gte: startTs, $lte: endTs } } },
+                { $unwind: '$values' },
+                {
+                    $project: {
+                        deviceId: '$deviceId',
+                        year: { $year: { date: { $toDate: '$values.ts' }, timezone: 'Asia/Ho_Chi_Minh' } },
+                        month: { $month: { date: { $toDate: '$values.ts' }, timezone: 'Asia/Ho_Chi_Minh' } },
+                        items: {
+                            $filter: {
+                                input: '$values.value',
+                                as: 'v',
+                                cond: { $in: ['$$v.tagId', tagIdArray] }
+                            }
+                        }
+                    }
+                },
+                { $unwind: '$items' },
+                {
+                    $group: {
+                        _id: { year: '$year', month: '$month', deviceId: '$deviceId' },
+                        maxVal: { $max: '$items.value' },
+                        minVal: { $min: '$items.value' }
+                    }
+                }
+            ];
+
+            const rawData = await ValueModel.aggregate(pipeline);
+
+            const deviceDataMap = {}; 
+            rawData.forEach(item => {
+                const dId = item._id.deviceId.toString();
+                const key = `${item._id.year}_${item._id.month}`;
+                if (!deviceDataMap[dId]) deviceDataMap[dId] = {};
+                deviceDataMap[dId][key] = { max: item.maxVal, min: item.minVal };
+            });
+
+            const currentYearData = Array(12).fill(0);
+            const previousYearData = Array(12).fill(0);
+            const currentYearCount = Array(12).fill(0);
+            const previousYearCount = Array(12).fill(0);
+
+            for (const dId in deviceDataMap) {
+                const records = deviceDataMap[dId];
+
+
+                const calculateConsumption = (year, m) => {
+                    const curKey = `${year}_${m}`;
+                    const prevKey = m === 1 ? `${year - 1}_12` : `${year}_${m - 1}`;
+
+                    const curData = records[curKey];
+                    if (!curData) return null; 
+                    let consumption = 0;
+                    const prevData = records[prevKey];
+
+                    if (prevData && prevData.max !== undefined) {
+                        consumption = curData.max - prevData.max;
+                    } else {
+                        consumption = curData.max - curData.min;
+                    }
+
+                    if (consumption < 0) consumption = curData.max - curData.min;
+
+                    return consumption;
+                };
+
+                for (let m = 1; m <= 12; m++) {
+                    const cons = calculateConsumption(prevYearNum, m);
+                    if (cons !== null) {
+                        previousYearData[m - 1] += cons;
+                        previousYearCount[m - 1]++;
+                    }
+                }
+
+                for (let m = 1; m <= 12; m++) {
+                    const cons = calculateConsumption(currentYearNum, m);
+                    if (cons !== null) {
+                        currentYearData[m - 1] += cons;
+                        currentYearCount[m - 1]++;
+                    }
+                }
+            }
+
+            const formatData = (dataArr, countArr) => dataArr.map((val, idx) => countArr[idx] > 0 ? Number(val.toFixed(2)) : 0);
+
+            return {
+                series: [
+                    {
+                        name: 'Current year',
+                        data: formatData(currentYearData, currentYearCount),
+                    },
+                    {
+                        name: 'Previous year',
+                        data: formatData(previousYearData, previousYearCount),
+                    },
+                ]
+            };
+
+        } catch (error) {
+            logger.error(error);
         }
     },
 

@@ -31,7 +31,7 @@ const userService = {
 
             const formattedUsers = users.map(user => {
                 if (user.role && user.role.name) {
-                    user.role = user.role.name; 
+                    user.role = user.role.name;
                 } else {
                     user.role = null;
                 }
@@ -81,8 +81,8 @@ const userService = {
                 password: 0,
                 __v: 0,
             })
-            .populate('role', 'name')
-            .lean()
+                .populate('role', 'name')
+                .lean()
 
             if (!data) {
                 throw new BadReq(errorCode.USER_NOT_FOUND)
@@ -101,7 +101,7 @@ const userService = {
     },
     update: async (userId, user) => {
         try {
-            const { fullname, username, role } = user
+            const { fullname, username, isLock, role } = user
 
             if (username) {
                 const checkUsername = await UserModel.findOne({ username, _id: { $ne: userId } })
@@ -115,7 +115,8 @@ const userService = {
                 {
                     fullname,
                     username,
-                    role,   
+                    role,
+                    isLock
                 },
                 {
                     new: true,
@@ -182,7 +183,7 @@ const userService = {
     changePassword: async (userId, user) => {
         try {
             const { passwordNew } = user
-            if(!passwordNew){
+            if (!passwordNew) {
                 throw new BadReq(errorCode.PASSWORD_REQUIRED)
             }
             const findUser = await UserModel.findById(userId)

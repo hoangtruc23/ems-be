@@ -1,5 +1,6 @@
 const DeviceHandler = require('../device/deviceHandler')
 const DeviceModel = require('../models/device')
+const TagnameModel = require('../models/tagname')
 const deviceHandler = new DeviceHandler()
 
 const normalizeDeviceUpdatePayload = async (deviceId, devicePayload) => {
@@ -135,9 +136,21 @@ const deviceService = {
     },
     create: async (device) => {
         try {
-            const { deviceCode, deviceName, location, protocol, config, isEnable } = device
+            const { deviceCode, deviceName, location, protocol, config, isEnable, copyTagsFromDeviceId } = device
 
-            await DeviceModel.create({ deviceCode, deviceName, location, protocol, config, isEnable })
+            const newDevice = await DeviceModel.create({ deviceCode, deviceName, location, protocol, config, isEnable })
+
+            if (copyTagsFromDeviceId) {
+                const oldDevice = await DeviceModel.findById(copyTagsFromDeviceId)
+                if (!oldDevice) {
+                    throw new Error('Old device to copy tags from not found')
+                }
+                // Approach 1: Transfer tags to the new device by updating their deviceId
+                await TagnameModel.updateMany(
+                    { deviceId: copyTagsFromDeviceId },
+                    { deviceId: newDevice._id }
+                )
+            }
 
             return null
         } catch (error) {

@@ -34,6 +34,49 @@ const alarmService = {
             unResolvedAlarms: unResolvedAlarms
         }
     },
+    summary: async () => {
+        const result = await AlarmModel.aggregate([
+                {
+                    $group: {
+                        _id: null,
+                        critical: {
+                            $sum: {
+                                $cond: [{ $in: ['$severity', [2, '2']] }, 1, 0]
+                            }
+                        },
+                        warning: {
+                            $sum: {
+                                $cond: [{ $in: ['$severity', [1, '1']] }, 1, 0]
+                            }
+                        },
+                        info: {
+                            $sum: {
+                                $cond: [{ $in: ['$severity', [0, '0']] }, 1, 0]
+                            }
+                        },
+                        resolved: {
+                            $sum: {
+                                $cond: [{ $eq: ['$status', 'resolved'] }, 1, 0]
+                            }
+                        }
+                    }
+                }
+            ]);
+
+            const stats = result[0] || {
+                critical: 0,
+                warning: 0,
+                info: 0,
+                resolved: 0
+            };
+
+            return {
+                critical: stats.critical,
+                warning: stats.warning,
+                info: stats.info,
+                resolved: stats.resolved
+            };
+    },
     create: async (alarm) => {
         const defaultTime = moment().tz('Asia/Ho_Chi_Minh').toDate();
 

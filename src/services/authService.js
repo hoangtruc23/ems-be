@@ -53,7 +53,7 @@ const authService = {
     logout: async (payloadToken) => {
         try {
 
-            const userId = payloadToken.user?._id; 
+            const userId = payloadToken.user?._id;
             const timestamp = payloadToken.ts;
 
             await clientRedis.del(
@@ -70,17 +70,11 @@ const authService = {
                 password: 0,
                 __v: 0,
             })
-            .populate('role', 'name')
-            .lean()
+                // .populate('role', 'name')
+                .lean()
 
             if (!user) {
                 throw new BadReq(errorCode.USER_NOT_FOUND)
-            }
-
-            if (user.role && user.role.name) {
-                user.role = user.role.name;
-            } else {
-                user.role = null;
             }
 
             return user

@@ -5,8 +5,6 @@ const deviceSeeder = require('./device')
 const tagnameSeeder = require('./tagname')
 const userSeeder = require('./user')
 const configFtpSeeder = require('./configFtp')
-const controlConfigSeeder = require('./controlConfig')
-const configControlSeeder = require('./configControl')
 const settingSeeder = require('./setting')
 const reportConfigSeeder = require('./reportConfig')
 
@@ -19,10 +17,10 @@ async function run() {
                 await userSeeder()
                 break
             }
-            // case 'role': {
-            //     await roleSeeder()
-            //     break
-            // }
+            case 'role': {
+                await roleSeeder()
+                break
+            }
             case 'device': {
                 await deviceSeeder()
                 break
@@ -44,12 +42,19 @@ async function run() {
                 await roleSeeder()
                 await userSeeder()
                 await settingSeeder()
+<<<<<<< HEAD
                 await reportConfigSeeder()
                 await deviceSeeder()
                 await tagnameSeeder()
                 // await configFtpSeeder()
                 // await controlConfigSeeder()
                 // await configControlSeeder()
+=======
+                await roleSeeder()
+                await deviceSeeder()
+                await tagnameSeeder()
+                await configFtpSeeder()
+>>>>>>> 5dc237b6b5e90f3925beb6100021175e1ab74758
                 break
             }
         }

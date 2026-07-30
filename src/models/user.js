@@ -3,7 +3,7 @@ const { Schema, model } = require('mongoose')
 const userSchema = new Schema({
     fullname: {
         type: String,
-        required: true,
+        required: false,
     },
     username: {
         type: String,
@@ -14,10 +14,14 @@ const userSchema = new Schema({
         required: true,
     },
     role: {
-        type: Schema.Types.ObjectId,
-        ref: 'roles',
+        type: String,
         required: true
     },
+    // role: {
+    //     type: Schema.Types.ObjectId,
+    //     ref: 'roles',
+    //     required: true
+    // },
 })
 
 const UserModel = model('users', userSchema, 'users')

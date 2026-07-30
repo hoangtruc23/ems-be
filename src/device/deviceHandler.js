@@ -8,6 +8,7 @@ const {
 } = require('../utils/modbus/modbusHelper')
 const ModbusHandler = require('./modbus/modbusClient')
 const SiemenHandler = require('./modbus/siemenHandler')
+const MqttHandler = require('./mqtt/mqttHandler')
 // class ReadTimeoutError extends Error {
 //     constructor(message) {
 //         super(message)
@@ -79,7 +80,6 @@ function DeviceHandler() {
                             await this.devices[deviceId].close() // Disconnect IP
                             delete this.devices[deviceId]
                         }
-
                         this.devices[deviceId] = null
                         const modbusHandler = new ModbusHandler(device)
                         this.devices[deviceId] = modbusHandler
@@ -89,6 +89,11 @@ function DeviceHandler() {
                         const s7Handler = new SiemenHandler(device)
                         this.devices[deviceId] = s7Handler
                         await s7Handler.connect()
+                        break
+                    case 'mqtt':
+                        const mqttHandler = new MqttHandler(device, this)
+                        this.devices[deviceId] = mqttHandler
+                        await mqttHandler.connect()
                         break
                     default:
                         throw new Error(
@@ -142,7 +147,18 @@ function DeviceHandler() {
                 case "siemens_s7":
                     if (this.devices[deviceId]) {
                         await this.devices[deviceId].close()
-                        logger.info(`Đã ngắt kết nối thiết bị ${deviceId}`)
+                        logger.info(`Đã ngắt kết nối thiết bị ${device.deviceName}`)
+                    }
+                    delete this.devices[deviceId]
+                    if (this.reconnectDevice[deviceId]) {
+                        clearTimeout(this.reconnectDevice[deviceId])
+                        this.reconnectDevice[deviceId] = null
+                    }
+                    break;
+                case "mqtt":
+                    if (this.devices[deviceId]) {
+                        await this.devices[deviceId].close()
+                        logger.info(`Đã ngắt kết nối thiết bị ${device.deviceName}`)
                     }
                     delete this.devices[deviceId]
                     if (this.reconnectDevice[deviceId]) {
@@ -174,7 +190,6 @@ function DeviceHandler() {
                     // logger.warn('Cron trước chưa đọc xong, bỏ qua lần này.')
                     return
                 }
-
                 try {
                     this.isReading = true
 
@@ -198,15 +213,46 @@ function DeviceHandler() {
                             return;
                         }
 
+                        // Kiểm tra nếu là thiết bị siemens_s7
+                        if (client.device?.protocol === 'siemens_s7') {
+                            if (!client.status) {
+                                if (deviceStatus.connected) {
+                                    deviceStatus.connected = false;
+                                    tags.forEach(t => this.datas[t._id.toString()] = null);
+                                    this.connect(deviceId);
+                                }
+                                return;
+                            }
+                            tags.forEach(tag => {
+                                const val = client.data ? client.data[tag.address] : null;
+                                this.datas[tag._id.toString()] = val ?? null;
+                            });
+                            return;
+                        }
+
+                        // Kiểm tra nếu là thiết bị mqtt
+                        if (client.device?.protocol === 'mqtt') {
+                            if (!client.status) {
+                                if (deviceStatus.connected) {
+                                    deviceStatus.connected = false;
+                                    tags.forEach(t => this.datas[t._id.toString()] = null);
+                                    this.connect(deviceId);
+                                }
+                            }
+                            return;
+                        }
+
                         // 4. TÌM DẢI ĐỊA CHỈ (MIN - MAX) ĐỂ ĐỌC 1 LẦN
                         const funcCodes = [3, 4];
                         for (const fc of funcCodes) {
+                            if (!deviceStatus.connected) break;
                             const tagsOfFC = tags.filter(t => t.functionCode === fc && t.bit === null);
                             if (tagsOfFC.length === 0) continue;
                             //Chia thành các length cụm 
                             const tagChunks = this.groupTagsByRange(tagsOfFC, 100);
 
                             for (const chunk of tagChunks) {
+                                if (!deviceStatus.connected) break;
                                 const addresses = chunk.map(t => Number(t.address));
 
                                 const minAddr = Math.min(...addresses);
@@ -228,6 +274,7 @@ function DeviceHandler() {
                                     let response = null;
                                     if (fc === 3) response = await client.readHoldingRegisters(minAddr, readLength);
                                     else if (fc === 4) response = await client.readInputRegisters(minAddr, readLength);
+<<<<<<< HEAD
 
                                     if (targetTag) {
                                         console.log('[DEBUG gridTotal AFTER READ]', {
@@ -240,6 +287,8 @@ function DeviceHandler() {
                                         })
                                     }
 
+=======
+>>>>>>> 5dc237b6b5e90f3925beb6100021175e1ab74758
                                     if (response?.buffer) {
                                         const chunkAddresses = new Set(addresses);
 
@@ -274,6 +323,11 @@ function DeviceHandler() {
                                     }
                                 } catch (err) {
                                     logger.error(`Lỗi đọc cụm ${minAddr}-${maxAddr}: ${err.message}`);
+                                    if (deviceStatus.connected) {
+                                        deviceStatus.connected = false;
+                                        tags.forEach(t => this.datas[t._id.toString()] = null);
+                                        this.connect(deviceId);
+                                    }
                                 }
                             }
                         }
