@@ -17,7 +17,7 @@ const {
     tagDashboardSummary,
     tagDashboardRealtimeDataMonitoring,
 } = require('../utils/constant/tagDashboard')
-const { powerQuality } = require('../utils/constant/tagRealtime')
+const { powerQuality, overviewSummary } = require('../utils/constant/tagRealtime')
 const ControlHelper = require('../utils/control/controlHelper')
 const dashboardService = require('../services/dashboardService')
 
@@ -47,6 +47,7 @@ const connectSocket = (socket) => {
     let dashboardLoadDistributionInterval = {}
     let dashboardConsumptionShareInterval = {}
     let dashboardRealtimeDataMonitoringInterval = {}
+    let realtimeOverviewSummaryInterval = {}
     let pcsAlarmInterval_2 = {}
     let pcsBatteryGroup = {}
     let controlModeInterval = {}
@@ -192,15 +193,22 @@ const connectSocket = (socket) => {
         try {
             //Filter meter  
             const chosenDevices = data || [];
-
+            if (chosenDevices.length === 0) {
+                socket.emit('SERVER SEND TREND TOTAL VALUE', {
+                    totalLiveLoad: null, averageVoltage: null, averageCurrent: null, powerFactor: null, frequency: null
+                });
+                return;
+            }
             if (trendInterval[socket.id]) {
                 clearInterval(trendInterval[socket.id]);
+                delete trendInterval[socket.id];
             }
 
             const tags = trendSummary;
             const regexPattern = new RegExp(tags.join('|'), 'i');
             let tagnames = await TagnameModel.find({
                 name: { $regex: regexPattern },
+                deviceId: { $in: chosenDevices }    
             })
                 .select({
                     name: 1,
@@ -209,22 +217,7 @@ const connectSocket = (socket) => {
                     deviceId: 1,
                 })
                 .lean();
-            const filteredTags = tagnames.filter(tag =>
-                chosenDevices.includes(tag.deviceId?.toString())
-            );
-
-            trendInterval[socket.id] = setInterval(async () => {
-                try {
-                    if (chosenDevices.length === 0) {
-                        socket.emit('SERVER SEND TREND TOTAL VALUE', {
-                            totalLiveLoad: null, averageVoltage: null, averageCurrent: null, powerFactor: null, frequency: null
-                        });
-                        return;
-                    }
-
-                    const tagValues = deviceHandler.datas;
-
-                    if (filteredTags.length === 0) {
+            if (tagnames.length === 0) {
                         socket.emit('SERVER SEND TREND TOTAL VALUE', {
                             totalLiveLoad: null,
                             averageVoltage: null,
@@ -235,18 +228,24 @@ const connectSocket = (socket) => {
                         return;
                     }
 
+            trendInterval[socket.id] = setInterval(async () => {
+                try {
+                    const tagValues = deviceHandler.datas;
+
+
                     let totalLoad = 0;
                     let totalVoltage = 0;
                     let totalCurrent = 0;
                     let totalPF = 0;
                     let totalFreq = 0;
 
+                    let countLoad = 0;
                     let countVoltage = 0;
                     let countCurrent = 0;
                     let countPF = 0;
                     let countFreq = 0;
 
-                    filteredTags.forEach((tag) => {
+                    tagnames.forEach((tag) => {
                         const lowerName = tag.name.toLowerCase();
                         const value = tagValues[tag.name] ?? null;
 
@@ -254,6 +253,7 @@ const connectSocket = (socket) => {
 
                         if (lowerName.includes('load')) {
                             totalLoad += value;
+                            countLoad++;
                         }
                         else if (lowerName.includes('voltage')) {
                             totalVoltage += value;
@@ -273,11 +273,11 @@ const connectSocket = (socket) => {
                         }
                     });
                     const finalResult = {
-                        totalLiveLoad: totalLoad > 0 ? totalLoad : null,
-                        averageVoltage: countVoltage > 0 ? (totalVoltage / countVoltage) : null,
-                        averageCurrent: countCurrent > 0 ? (totalCurrent / countCurrent) : null,
-                        powerFactor: countPF > 0 ? (totalPF / countPF) : null,
-                        frequency: countFreq > 0 ? (totalFreq / countFreq) : null
+                        totalLiveLoad: countLoad > 0 ? Number(totalLoad.toFixed(2)) : null,
+                        averageVoltage: countVoltage > 0 ? Number((totalVoltage / countVoltage).toFixed(2)) : null,
+                        averageCurrent: countCurrent > 0 ? Number((totalCurrent / countCurrent).toFixed(2)) : null,
+                        powerFactor: countPF > 0 ? Number((totalPF / countPF).toFixed(2)) : null,
+                        frequency: countFreq > 0 ? Number((totalFreq / countFreq).toFixed(2)) : null
                     };
 
                     socket.emit('SERVER SEND TREND TOTAL VALUE', finalResult);
@@ -297,6 +297,7 @@ const connectSocket = (socket) => {
 
             if (trendLoadInterval[socket.id]) {
                 clearInterval(trendLoadInterval[socket.id]);
+                delete trendLoadInterval[socket.id];
             }
 
             if (!Array.isArray(deviceIds) || deviceIds.length === 0) {
@@ -331,6 +332,10 @@ const connectSocket = (socket) => {
                 name: { $regex: /load/i }
             }).select('_id name deviceId').lean();
 
+            const tagByDeviceId = new Map(
+                loadTags.map(t => [t.deviceId.toString(), t])
+            );
+
             socket.emit('SERVER SEND TREND LOAD CHART', chartCache);
 
             trendLoadInterval[socket.id] = setInterval(() => {
@@ -342,11 +347,14 @@ const connectSocket = (socket) => {
                     chartCache.timestamps.push(now);
 
                     chartCache.series.forEach(serie => {
-                        const tag = loadTags.find(t => t.deviceId.toString() === serie.deviceId);
-
+                        const tag = tagByDeviceId.get(serie.deviceId);
                         let liveVal = null;
                         if (tag) {
-                            liveVal = tagValues[tag._id.toString()] ?? tagValues[tag.name] ?? null;
+                            const tagIdStr = tag._id?.toString();
+                            const rawVal = tagValues[tag.name] ?? null;
+                            if (rawVal !== null && rawVal !== undefined && !isNaN(rawVal)) {
+                                liveVal = Number(Number(rawVal).toFixed(2));
+                            }
                         }
 
                         serie.data.push(liveVal);
@@ -371,14 +379,26 @@ const connectSocket = (socket) => {
     socket.on('CLIENT GET POWER QUALITY INFO', async (data) => {
         try {
             const { deviceIds = [] } = data || {};
+
+            if (deviceIds.length === 0) {
+                socket.emit('SERVER SEND POWER QUALITY VALUE', {
+                    powerFactor: null,
+                    voltageTHD: null,
+                    currentTHD: null,
+                    phaseImbalance: null
+                });
+                return;
+            }
             if (trendPowerQualityInterval[socket.id]) {
                 clearInterval(trendPowerQualityInterval[socket.id]);
+                delete trendPowerQualityInterval[socket.id];
             }
 
             const tags = powerQuality;
             const regexPattern = new RegExp(tags.join('|'), 'i');
             let tagnames = await TagnameModel.find({
                 name: { $regex: regexPattern },
+                deviceId: { $in: deviceIds }    
             })
                 .select({
                     name: 1,
@@ -387,33 +407,20 @@ const connectSocket = (socket) => {
                     deviceId: 1,
                 })
                 .lean()
-
-            const filteredTags = tagnames.filter(tag => deviceIds.includes(tag.deviceId?.toString()));
-
+            
+            if (tagnames.length === 0) {
+                socket.emit('SERVER SEND POWER QUALITY VALUE', {
+                    powerFactor: null,
+                    voltageTHD: null,
+                    currentTHD: null,
+                    phaseImbalance: null
+                });
+                return;
+            }
             trendPowerQualityInterval[socket.id] = setInterval(async () => {
                 try {
 
-                    if (deviceIds.length === 0) {
-                        socket.emit('SERVER SEND POWER QUALITY VALUE', {
-                            powerFactor: null,
-                            voltageTHD: null,
-                            currentTHD: null,
-                            phaseImbalance: null
-                        });
-                        return;
-                    }
-
                     const tagValues = deviceHandler.datas;
-
-                    if (filteredTags.length === 0) {
-                        socket.emit('SERVER SEND POWER QUALITY VALUE', {
-                            powerFactor: null,
-                            voltageTHD: null,
-                            currentTHD: null,
-                            phaseImbalance: null
-                        });
-                        return;
-                    }
 
                     let totalPF = 0;
                     let totalVoltageTHD = 0;
@@ -425,7 +432,7 @@ const connectSocket = (socket) => {
                     let countCurrentTHD = 0;
                     let countPhaseImbalance = 0;
 
-                    filteredTags.forEach((tag) => {
+                    tagnames.forEach((tag) => {
                         const lowerName = tag.name.toLowerCase();
                         const value = tagValues[tag.name] ?? null;
 
@@ -449,10 +456,10 @@ const connectSocket = (socket) => {
                         }
                     });
                     const result = {
-                        powerFactor: totalPF > 0 ? (totalPF / countPF) : null,
-                        voltageTHD: totalVoltageTHD > 0 ? (totalVoltageTHD / countVoltageTHD) : null,
-                        currentTHD: totalCurrentTHD > 0 ? (totalCurrentTHD / countCurrentTHD) : null,
-                        phaseImbalance: totalPhaseImbalance > 0 ? (totalPhaseImbalance / countPhaseImbalance) : null
+                        powerFactor: countPF > 0 ? Number((totalPF / countPF).toFixed(2)) : null,
+                        voltageTHD: countVoltageTHD > 0 ? Number((totalVoltageTHD / countVoltageTHD).toFixed(2)) : null,
+                        currentTHD: countCurrentTHD > 0 ? Number((totalCurrentTHD / countCurrentTHD).toFixed(2)) : null,
+                        phaseImbalance: countPhaseImbalance > 0 ? Number((totalPhaseImbalance / countPhaseImbalance).toFixed(2)) : null
                     };
 
                     socket.emit('SERVER SEND POWER QUALITY VALUE', result);
@@ -469,12 +476,29 @@ const connectSocket = (socket) => {
         try {
             if (dashboardSummaryInterval[socket.id]) {
                 clearInterval(dashboardSummaryInterval[socket.id]);
+                delete dashboardSummaryInterval[socket.id];
+            }
+            let totalDevicesCount = await DeviceModel.countDocuments();
+
+            const enabledDevices = await DeviceModel.find({ isEnable: true }).select('_id deviceName').lean();
+            const enabledDeviceIds = enabledDevices.map(d => d._id);
+
+            if (enabledDeviceIds.length === 0) {
+                socket.emit('SERVER SEND DASHBOARD SUMMARY VALUE', {
+                    totalConsumption: null,
+                    currentDemand: null,
+                    peakLoad: null,
+                    powerFactor: null,
+                    activeMeters: { onlineDevicesCount: 0, totalDevicesCount: totalDevicesCount }
+                });
+                return;
             }
 
             const tags = tagDashboardSummary;
             const regexPattern = new RegExp(tags.join('|'), 'i');
             let tagnames = await TagnameModel.find({
                 name: { $regex: regexPattern },
+                deviceId: { $in: enabledDeviceIds }
             })
                 .select({
                     name: 1,
@@ -488,18 +512,16 @@ const connectSocket = (socket) => {
                 })
                 .lean()
 
-            let totalDevicesCount = await DeviceModel.countDocuments();
-
             dashboardSummaryInterval[socket.id] = setInterval(async () => {
                 try {
                     const tagValues = deviceHandler.datas;
 
                     let totalConsumption = 0;
                     let totalDemand = 0;
-                    let peakLoad = 0;
+                    let peakLoad = null;
                     let totalPF = 0;
 
-                    let peakLoadDeviceId = null;
+                    let countConsumption = 0;
                     let peakLoadDeviceName = null;
                     let countDemand = 0;
                     let countPF = 0;
@@ -512,15 +534,17 @@ const connectSocket = (socket) => {
 
                         if (lowerName.includes('consumption')) {
                             totalConsumption += value;
+                            countConsumption++;
                         }
                         else if (lowerName.includes('demand')) {
                             totalDemand += value;
                             countDemand++;
                         }
-                        else if (lowerName.includes('load') && value > peakLoad) {
-                            peakLoad = value;
-                            peakLoadDeviceId = tag.deviceId;
-                            peakLoadDeviceName = tag.deviceId?.deviceName;
+                        else if (lowerName.includes('load')) {
+                            if (peakLoad === null || value > peakLoad) {
+                                peakLoad = value;
+                                peakLoadDeviceName = tag.deviceId?.deviceName || null;
+                            }
                         }
                         else if (lowerName.includes('powerfactor')) {
                             totalPF += value;
@@ -532,10 +556,10 @@ const connectSocket = (socket) => {
                     const onlineDevicesCount = deviceHandler.connectionDevice?.filter(d => d.connected).length || 0;
 
                     const result = {
-                        totalConsumption: totalConsumption > 0 ? totalConsumption : null,
-                        currentDemand: totalDemand > 0 ? (totalDemand / countDemand) : null,
-                        peakLoad: peakLoad > 0 ? { peakLoad, peakLoadDeviceName } : null,
-                        powerFactor: totalPF > 0 ? (totalPF / countPF) : null,
+                        totalConsumption: countConsumption > 0 ? Number(totalConsumption.toFixed(2)) : null,
+                        currentDemand: countDemand > 0 ? Number((totalDemand / countDemand).toFixed(2)) : null,
+                        peakLoad: peakLoad !== null ? { peakLoad: Number(peakLoad.toFixed(2)), peakLoadDeviceName } : null,
+                        powerFactor: countPF > 0 ? Number((totalPF / countPF).toFixed(2)) : null,
                         activeMeters: { onlineDevicesCount, totalDevicesCount }
                     };
 
@@ -558,6 +582,7 @@ const connectSocket = (socket) => {
 
             if (dashboardLoadDistributionInterval[socket.id]) {
                 clearInterval(dashboardLoadDistributionInterval[socket.id]);
+                delete dashboardLoadDistributionInterval[socket.id];
             }
 
             const calculateTimeRange = (range) => {
@@ -680,6 +705,7 @@ const connectSocket = (socket) => {
         try {
             if (dashboardConsumptionShareInterval[socket.id]) {
                 clearInterval(dashboardConsumptionShareInterval[socket.id]);
+                delete dashboardConsumptionShareInterval[socket.id]
             }
 
             const enabledDevices = await DeviceModel.find({ isEnable: true }).select('_id deviceName').lean();
@@ -700,6 +726,12 @@ const connectSocket = (socket) => {
                     select: 'deviceName',
                 })
                 .lean();
+            if (tagnames.length === 0) {
+                socket.emit('SERVER SEND DASHBOARD CONSUMPTION SHARE VALUE', { 
+                    labels: [], series: [], percentages: [], totalConsumption: null 
+                });
+                return;
+            }
 
             dashboardConsumptionShareInterval[socket.id] = setInterval(async () => {
                 try {
@@ -709,8 +741,9 @@ const connectSocket = (socket) => {
                     const deviceDataList = [];
 
                     tagnames.forEach((tag) => {
-                        const rawVal = tagValues[tag._id?.toString()] ?? tagValues[tag.name] ?? 0;
-                        const val = Number(rawVal) > 0 ? Number(rawVal) : 0;
+                        const rawVal = tagValues[tag.name] ?? null;
+                        if (rawVal === undefined || rawVal === null || isNaN(rawVal)) return;
+                        const val = Number(rawVal);
 
                         const labelName = tag.deviceId?.deviceName || tag.name;
 
@@ -757,6 +790,7 @@ const connectSocket = (socket) => {
         try {
             if (dashboardRealtimeDataMonitoringInterval[socket.id]) {
                 clearInterval(dashboardRealtimeDataMonitoringInterval[socket.id]);
+                delete dashboardRealtimeDataMonitoringInterval[socket.id];
             }
 
             const devices = await DeviceModel.find()
@@ -833,6 +867,99 @@ const connectSocket = (socket) => {
                     })
                     socket.emit('SERVER SEND REALTIME MONITORING VALUE', result);
                 } catch (error) {
+                    logger.error(error)
+                }
+            }, TIME)
+
+        } catch (error) {
+            logger.error(error)
+        }
+    })
+
+    socket.on('CLIENT GET REALTIME OVERVIEW SUMMARY INFO', async () => {
+        try {
+            if (realtimeOverviewSummaryInterval[socket.id]) {
+                clearInterval(realtimeOverviewSummaryInterval[socket.id]);
+                delete realtimeOverviewSummaryInterval[socket.id];
+            }
+
+            const enabledDevices = await DeviceModel.find({ isEnable: true }).select('_id deviceName').lean();
+            const enabledDeviceIds = enabledDevices.map(d => d._id.toString());
+            if (enabledDeviceIds.length === 0) {
+                socket.emit('SERVER SEND REALTIME OVERVIEW SUMMARY VALUE', {
+                    totalPowerDemand: null,
+                    gridUtilization : null,
+                    avgPowerFactor : null,
+                    dailyCarbon : null 
+                });
+                return;
+            }
+
+            const tags = overviewSummary;
+            const regexPattern = new RegExp(tags.join('|'), 'i');
+            let tagnames = await TagnameModel.find({
+                name: { $regex: regexPattern },
+                deviceId: { $in: enabledDeviceIds }
+            })
+            .select({
+                    name: 1,
+                    symbol: 1,
+                    unit: 1,
+                    deviceId: 1,
+            })
+            .lean()
+
+            if (tagnames.length === 0) {
+                socket.emit('SERVER SEND REALTIME OVERVIEW SUMMARY VALUE', {
+                    totalPowerDemand: null,
+                    gridUtilization : null,
+                    avgPowerFactor : null,
+                    dailyCarbon : null 
+                });
+                return;
+            }
+            realtimeOverviewSummaryInterval[socket.id] = setInterval(async () => {
+                try {
+                    const tagValues = deviceHandler.datas;
+
+                    let totalPowerDemand = 0;
+                    let totalGridUtilization = 0;
+                    let totalPF = 0;
+                    let totalDailyCarbon = 0;
+
+                    let countPowerDemand = 0;
+                    let countGridUtilization = 0;
+                    let countPF = 0;
+                    
+                    tagnames.forEach((tag) => {
+                        const lowerName = tag.name.toLowerCase();
+                        const value = tagValues[tag.name] ?? null;
+
+                        if (value === undefined || value === null) return
+
+                        if (lowerName.includes('powerdemand')) {
+                            totalPowerDemand += value;
+                            countPowerDemand++;
+                        }
+                        else if (lowerName.includes('gridutilization')) {
+                            totalGridUtilization += value;
+                            countGridUtilization++;
+                        }
+                        else if (lowerName.includes('powerfactor')) {
+                            totalPF += value;
+                            countPF++;
+                        }
+                    });
+
+                    const result = {
+                        totalPowerDemand: countPowerDemand > 0 ? Number(totalPowerDemand.toFixed(2)) : null,
+                        gridUtilization: countGridUtilization > 0 ? Number((totalGridUtilization / countGridUtilization).toFixed(2)) : null,
+                        avgPowerFactor: countPF > 0 ? Number((totalPF / countPF).toFixed(2)) : null,
+                        dailyCarbon: null 
+                    };
+
+                    socket.emit('SERVER SEND REALTIME OVERVIEW SUMMARY VALUE', result);
+                } catch (error){
                     logger.error(error)
                 }
             }, TIME)
@@ -1191,6 +1318,9 @@ const connectSocket = (socket) => {
 
         clearInterval(dashboardRealtimeDataMonitoringInterval[socket.id])
         delete dashboardRealtimeDataMonitoringInterval[socket.id]
+
+        clearInterval(realtimeOverviewSummaryInterval[socket.id])
+        delete realtimeOverviewSummaryInterval[socket.id]
     })
 }
 module.exports = connectSocket

@@ -5,6 +5,13 @@ const powerQuality = [
     'phaseImbalance'
 ]
 
+const overviewSummary = [
+    'demand',
+    'gridUtilization',
+    'powerFactor'
+]
+
 module.exports = {
-    powerQuality
+    powerQuality,
+    overviewSummary
 }
